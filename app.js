@@ -50,6 +50,26 @@
   $('#logout').addEventListener('click', async () => { await S.sb.auth.signOut(); location.reload(); });
   S.sb.auth.getSession().then(({ data }) => { if (data.session) boot(); });
 
+  // Nulstil adgangskode: Supabase sender brugeren hertil med et recovery-link.
+  S.sb.auth.onAuthStateChange((event) => { if (event === 'PASSWORD_RECOVERY') showRecovery(); });
+  function showRecovery() {
+    $('#login-form').hidden = true;
+    let f = document.getElementById('recovery-form');
+    if (f) return;
+    f = document.createElement('form');
+    f.id = 'recovery-form'; f.className = 'login-card';
+    f.innerHTML = '<h1>Ny adgangskode</h1><p class="muted">Vælg en ny adgangskode (mindst 10 tegn).</p>' +
+      '<label>Ny adgangskode<input id="rec-pw" type="password" minlength="10" required autocomplete="new-password"></label>' +
+      '<button class="btn" type="submit">Gem adgangskode</button><p id="rec-msg" class="error" role="alert"></p>';
+    $('#login').appendChild(f);
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const { error } = await S.sb.auth.updateUser({ password: $('#rec-pw').value });
+      if (error) { $('#rec-msg').textContent = 'Kunne ikke gemme: ' + error.message; return; }
+      location.hash = ''; location.reload();
+    });
+  }
+
   async function boot() {
     const { data: { user } } = await S.sb.auth.getUser();
     if (!user) return;
