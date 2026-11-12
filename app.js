@@ -48,6 +48,7 @@
     if (error) { $('#login-error').textContent = 'Forkert e-mail eller adgangskode.'; return; }
     boot();
   });
+  $('#chpw').addEventListener('click', () => showRecovery());
   $('#logout').addEventListener('click', async () => { await S.sb.auth.signOut(); location.reload(); });
   S.sb.auth.getSession().then(({ data }) => { if (IS_RECOVERY) { showRecovery(); return; } if (data.session) boot(); });
 
