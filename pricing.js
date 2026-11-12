@@ -80,6 +80,7 @@ const isQuarterHours = (h) => Number.isFinite(h) && Math.abs(h * 4 - Math.round(
 export function computePrice(p, i) {
   const service = i.service ?? 'route';
   if (service !== 'route' && service !== 'hourly') throw new QuoteError('Ukendt ydelse');
+  if (['van_large', 'lorry18', 'lorry24'].includes(i.vehicle)) throw new QuoteError('Denne bil har ingen dokumenteret fast pris. Send en forespørgsel, så får du et tilbud uden betaling.', 'QUOTE_ONLY');
   if (i.vehicle !== 'van' && i.vehicle !== 'lift') throw new QuoteError('Vælg kassebil eller mindre liftbil.');
   const v = i.vehicle;
   const pickup = i.pickupAt instanceof Date ? i.pickupAt : new Date(i.pickupAt);

@@ -9,7 +9,8 @@
   const dt = (iso) => new Date(iso).toLocaleString('da-DK', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   const ago = (iso) => { const m = Math.round((Date.now() - new Date(iso)) / 60000); return m < 1 ? 'lige nu' : m < 60 ? `${m} min siden` : `${Math.round(m / 60)} t siden`; };
   const pal = (n) => `${n} ${Number(n) === 1 ? 'palle' : 'paller'}`;
-  const vehLabel = (o) => `${o.vehicle === 'lift' ? 'Liftbil' : 'Kassebil'}${o.service === 'hourly' ? ` · timebooking ${o.hours} t` : ''}${Number(o.extra_man_hours) ? ` · +mand ${o.extra_man_hours} t` : ''}`;
+  const VEH_NAME = { van: 'Mercedes-Benz Vito – kassebil', van_large: 'Mercedes-Benz Sprinter L2H2 – stor kassebil', lift: 'Mercedes-Benz Sprinter – liftbil', lorry18: 'Mercedes-Benz – lastbil (18 pallepladser)', lorry24: 'Mercedes-Benz – lastbil (24 pallepladser)' };
+  const vehLabel = (o) => `${VEH_NAME[o.vehicle] || o.vehicle}${o.service === 'hourly' ? ` · timebooking ${o.hours} t` : ''}${Number(o.extra_man_hours) ? ` · +mand ${o.extra_man_hours} t` : ''}`;
   const distLabel = (o) => o.service === 'hourly' ? 'timebooking' : `${o.distance_km} km`;
   const city = (a) => String(a || '').split(',').slice(-2, -1)[0]?.trim().replace(/^\d{4}\s*/, '') || a;
 
@@ -85,7 +86,7 @@
     $('#login').hidden = true; $('#shell').hidden = false;
     $('#who').textContent = me.full_name || user.email;
     fillStatusFilter(); wireUI();
-    await Promise.all([loadDrivers(), loadOrders(), loadPositions(), loadPricing(), loadCompany(), loadInquiries()]);
+    await Promise.all([loadDrivers(), loadOrders(), loadPositions(), loadPricing(), loadCompany(), loadInquiries(), loadVehicles()]);
     renderAll();
     subscribe();
     setInterval(() => { loadOrders().then(renderAll); }, 30000); // sikkerhedsnet hvis realtime falder ud
@@ -112,6 +113,9 @@
 
   async function loadCompany() {
     const { data } = await S.sb.from('company_settings').select('*').eq('id', 1).single(); S.company = data;
+  }
+  async function loadVehicles() {
+    const { data } = await S.sb.from('vehicle_types').select('*').order('sort'); S.vehicles = data || [];
   }
   async function loadInquiries() {
     const { data } = await S.sb.from('quote_inquiries').select('*, customer:profiles!quote_inquiries_customer_id_fkey(full_name, company, phone)').order('created_at', { ascending: false }).limit(200);
@@ -163,7 +167,7 @@
   function renderAll() {
     const fresh = S.orders.filter((o) => o.status === 'new');
     const b = $('#badge-new'); b.hidden = !fresh.length; b.textContent = fresh.length;
-    renderPanel(); renderOrdersTable(); renderDriversList(); renderPricingForm(); renderCompanyForm(); renderInquiries();
+    renderPanel(); renderOrdersTable(); renderDriversList(); renderPricingForm(); renderCompanyForm(); renderInquiries(); renderVehicles();
     renderMap();
     if (S.selected) { const o = S.orders.find((x) => x.id === S.selected); if (o && !$('#drawer').hidden) openDrawer(o.id, true); }
   }
@@ -232,10 +236,8 @@
     const paid = o.payment_status === 'paid';
     return `<div class="card" id="cancel-panel" style="margin-top:12px">
       <b>Annullér ${esc(o.ref)}</b>
-      ${paid ? `<label class="chip" style="margin-top:8px"><input type="radio" name="fee" value="none"> Ingen gebyr (vores fejl) – refundér ${kr(o.price_total)}</label>
-      <label class="chip" style="margin-top:6px"><input type="radio" name="fee" value="auto" checked> Opkræv afbestillingsgebyr efter prisliste</label>
-      <label class="chip" style="margin-top:6px"><input type="checkbox" id="c-disp"> Bilen var allerede afsendt / kørte forgæves</label>
-      <p id="cancel-preview" class="muted"></p>` : '<p class="muted">Ordren er ikke betalt, så der opkræves intet gebyr.</p>'}
+      ${paid ? `<p class="muted" style="margin-top:8px">Standard: intet gebyr – hele ${kr(o.price_total)} refunderes på kortet. Krav om dokumenteret, rimeligt tab behandles manuelt uden for systemet og trækkes aldrig automatisk.</p>`
+      : '<p class="muted">Ordren er ikke betalt, så der opkræves intet gebyr.</p>'}
       <div style="display:flex;gap:8px;margin-top:8px"><button id="c-yes" class="btn danger">Ja, annullér</button><button id="c-no" class="btn ghost">Fortryd</button></div></div>`;
   }
   function cancelPreview(o) {
@@ -247,12 +249,10 @@
   async function cancelOrder(id) {
     const o = S.orders.find((x) => x.id === id); if (!o) return;
     $('#d-cancel').outerHTML = cancelPanelHtml(o);
-    cancelPreview(o);
-    $('#cancel-panel').addEventListener('change', () => cancelPreview(o));
     $('#c-no').addEventListener('click', () => openDrawer(id, true));
     $('#c-yes').addEventListener('click', async () => {
-      const fee_mode = document.querySelector('#cancel-panel [name=fee]:checked')?.value || 'none';
-      const { error } = await S.sb.functions.invoke('admin-cancel-order', { body: { order_id: id, fee_mode, dispatched: !!$('#c-disp')?.checked } });
+      const fee_mode = 'none';
+      const { error } = await S.sb.functions.invoke('admin-cancel-order', { body: { order_id: id, fee_mode, dispatched: false } });
       if (error) { alert(await fnError(error)); return; }
       await loadOrders(); renderAll();
     });
@@ -284,13 +284,44 @@
     const b = $('#badge-inq'); if (b) { b.hidden = !open; b.textContent = open; }
     $('#inq-list').innerHTML = S.inquiries.map((q) => `<div class="card" style="margin-bottom:12px" data-inq="${esc(q.id)}">
       <b>${esc(q.ref)} · ${esc(q.customer?.company || q.customer?.full_name || '')}</b> <span class="muted">${esc(dt(q.created_at))} · ${esc(q.customer?.phone || q.phone || '')}</span>
-      <p style="margin:6px 0">${esc(q.from_address)}${q.to_address ? ' → ' + esc(q.to_address) : ''}${q.vehicle ? ' · ' + (q.vehicle === 'lift' ? 'liftbil' : 'kassebil') : ''}<br>${esc(q.details)}</p>
-      <label>Status<select class="inq-status"><option value="open"${q.status === 'open' ? ' selected' : ''}>Åben</option><option value="answered"${q.status === 'answered' ? ' selected' : ''}>Besvaret</option><option value="closed"${q.status === 'closed' ? ' selected' : ''}>Lukket</option></select></label>
+      <p style="margin:6px 0">${esc(q.from_address)}${q.to_address ? ' → ' + esc(q.to_address) : ''}${q.vehicle ? ' · ' + esc(VEH_NAME[q.vehicle] || q.vehicle) : ''}<br>${esc(q.details)}</p>
+      <label>Status<select class="inq-status"><option value="open"${q.status === 'open' ? ' selected' : ''}>Åben</option><option value="answered"${q.status === 'answered' ? ' selected' : ''}>Besvaret</option><option value="offered"${q.status === 'offered' ? ' selected' : ''} disabled>Tilbud sendt</option><option value="accepted"${q.status === 'accepted' ? ' selected' : ''} disabled>Accepteret</option><option value="closed"${q.status === 'closed' ? ' selected' : ''}>Lukket</option></select></label>
       <label>Intern note / tilbudt pris<input class="inq-note" maxlength="1000" value="${esc(q.admin_note || '')}"></label>
-      <button class="btn small inq-save">Gem</button></div>`).join('') || '<p class="muted">Ingen tilbudsforespørgsler.</p>';
+      <button class="btn small inq-save">Gem</button>
+      ${q.order_id ? '<p class="muted">Tilbuddet er brugt til en ordre.</p>' : `<details style="margin-top:8px"><summary>${q.status === 'offered' ? 'Tilbud sendt – ret/send igen' : q.status === 'accepted' ? 'Accepteret ' + esc(dt(q.accepted_at)) + ' (vilkår ' + esc(q.accepted_terms_version || '?') + ')' : 'Lav tilbud til kunden'}</summary>
+        <label>Pris ekskl. moms (kr)<input class="of-price" type="number" min="1" step="1" value="${q.offer_ex_vat ? q.offer_ex_vat / 100 : ''}"></label>
+        <label>Afhentning<input class="of-pickup" type="datetime-local" value="${q.offer_pickup_at ? new Date(new Date(q.offer_pickup_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''}"></label>
+        <label>Pallepladser<input class="of-pal" type="number" min="1" value="${q.offer_pallets || ''}"></label>
+        <label>Vægt (kg)<input class="of-kg" type="number" min="1" value="${q.offer_weight_kg || ''}"></label>
+        <label>Gyldigt til<input class="of-valid" type="datetime-local"></label>
+        <label>Besked til kunden<input class="of-note" maxlength="1000" value="${esc(q.offer_note || '')}"></label>
+        <button class="btn small of-send">Send tilbud til kunden</button></details>`}</div>`).join('') || '<p class="muted">Ingen tilbudsforespørgsler.</p>';
+    $$('#inq-list [data-inq] .of-send').forEach((btn) => btn.addEventListener('click', async () => {
+      const el = btn.closest('[data-inq]'); const v = (c) => el.querySelector(c).value;
+      const { error } = await S.sb.rpc('admin_send_offer', { p_id: el.dataset.inq, p_ex_vat: Math.round(parseFloat(v('.of-price')) * 100), p_note: v('.of-note') || null, p_pickup_at: new Date(v('.of-pickup')).toISOString(), p_pallets: parseInt(v('.of-pal'), 10), p_weight_kg: parseInt(v('.of-kg'), 10), p_valid_until: new Date(v('.of-valid')).toISOString() });
+      if (error) alert('Tilbuddet blev ikke sendt: ' + error.message); else { await loadInquiries(); renderInquiries(); }
+    }));
     $$('#inq-list [data-inq]').forEach((el) => el.querySelector('.inq-save').addEventListener('click', async () => {
       const { error } = await S.sb.from('quote_inquiries').update({ status: el.querySelector('.inq-status').value, admin_note: el.querySelector('.inq-note').value.trim() || null }).eq('id', el.dataset.inq);
       if (error) alert(error.message); else { await loadInquiries(); renderInquiries(); }
+    }));
+  }
+
+  // ───────────── Køretøjer ─────────────
+  const VEH_FIELDS = [['pallets_note', 'Pallekapacitet (tekst)'], ['cargo_dimensions', 'Lastrumsmål'], ['max_payload_kg', 'Maks. godsvægt'], ['door_openings', 'Døråbninger'], ['lift_capacity', 'Liftkapacitet']];
+  function renderVehicles() {
+    const el = $('#veh-list'); if (!el || !S.vehicles) return;
+    if (el.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
+    el.innerHTML = S.vehicles.map((v) => `<div class="card" style="margin-bottom:12px" data-veh="${v.id}"><b>${esc(v.name)}</b> <span class="muted">${v.bookable ? 'Kan bestilles med fast pris' : 'Få et tilbud'}${v.verified ? ' · verificeret' : ' · ikke verificeret'}</span>
+      ${v.mapping_note ? `<p class="muted">${esc(v.mapping_note)}</p>` : ''}
+      ${VEH_FIELDS.map(([k, l]) => `<label>${l}<input data-f="${k}" value="${esc(v[k] || '')}" maxlength="200"></label>`).join('')}
+      <label><input type="checkbox" data-f="bookable"${v.bookable ? ' checked' : ''}> Kan bestilles med fast pris (kun hvis prisen er dokumenteret)</label>
+      <label><input type="checkbox" data-f="verified"${v.verified ? ' checked' : ''}> Data er verificeret mod dokumentation/opmåling</label>
+      <button class="btn small veh-save">Gem</button></div>`).join('');
+    $$('#veh-list [data-veh]').forEach((c) => c.querySelector('.veh-save').addEventListener('click', async () => {
+      const upd = {}; c.querySelectorAll('[data-f]').forEach((i) => { upd[i.dataset.f] = i.type === 'checkbox' ? i.checked : (i.value.trim() || (i.dataset.f === 'pallets_note' ? 'Skal bekræftes' : 'Afventer dokumentation')); });
+      const { error } = await S.sb.from('vehicle_types').update(upd).eq('id', c.dataset.veh);
+      if (error) alert(error.message); else { await loadVehicles(); renderVehicles(); }
     }));
   }
 
