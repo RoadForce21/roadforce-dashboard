@@ -6,7 +6,8 @@ export class QuoteError extends Error {
   constructor(message, code = 'INVALID') { super(message); this.name = 'QuoteError'; this.code = code; }
 }
 
-export const VEHICLES = { van: 'Kassebil', lift: 'Mindre liftbil' };
+export const VEHICLES = { van: 'Mercedes-Benz Vito – kassebil', van_large: 'Mercedes-Benz Sprinter L2H2 – stor kassebil', lift: 'Mercedes-Benz Sprinter – liftbil (8 paller)' };
+export const HANDLING_MIN = { van: 10, van_large: 15, lift: 15 };   // inkluderet håndtering pr. stop (minutter)
 
 /** Standardsatser = prislisten (øre). Gemmes i tabellen pricing_settings og kan rettes i dashboardet. */
 export const DEFAULT_PRICING = {
@@ -16,6 +17,10 @@ export const DEFAULT_PRICING = {
   van_wait_ore: 14000, lift_wait_ore: 16500,          // pr. påbegyndt kvarter ud over inkluderet tid
   van_hour_ore: 55000, lift_hour_ore: 67500,
   van_extra_km_ore: 400, lift_extra_km_ore: 500,      // timebooking: km ud over puljen
+  // Sprinter L2H2: satser foreslået af RoadForce 12. nov. 2026. Kapacitet er IKKE dokumenteret → fast pris først når begge grænser er udfyldt.
+  van_large_min_ore: 49500, van_large_km_ore: 1800, van_large_stop_ore: 10500, van_large_wait_ore: 15000, van_large_hour_ore: 62500, van_large_extra_km_ore: 450,
+  van_large_max_pallets: null, van_large_max_weight_kg: null,
+  price_version: '2026-11-12',
   hourly_min_hours: 2, km_per_hour: 20,
   max_route_km: 100,                                  // længere A–B-ture kræver konkret tilbud
   max_stops: 5,
@@ -80,15 +85,17 @@ const isQuarterHours = (h) => Number.isFinite(h) && Math.abs(h * 4 - Math.round(
 export function computePrice(p, i) {
   const service = i.service ?? 'route';
   if (service !== 'route' && service !== 'hourly') throw new QuoteError('Ukendt ydelse');
-  if (['van_large', 'lorry18', 'lorry24'].includes(i.vehicle)) throw new QuoteError('Denne bil har ingen dokumenteret fast pris. Send en forespørgsel, så får du et tilbud uden betaling.', 'QUOTE_ONLY');
-  if (i.vehicle !== 'van' && i.vehicle !== 'lift') throw new QuoteError('Vælg kassebil eller mindre liftbil.');
+  if (['lorry18', 'lorry24'].includes(i.vehicle)) throw new QuoteError('Lastbiler prissættes ved forespørgsel. Send en forespørgsel, så får du et tilbud uden betaling.', 'QUOTE_ONLY');
+  if (!['van', 'van_large', 'lift'].includes(i.vehicle)) throw new QuoteError('Vælg et køretøj.');
+  if (i.vehicle === 'van_large' && (p.van_large_max_pallets == null || p.van_large_max_weight_kg == null)) throw new QuoteError('Kapaciteten for denne bil er ikke dokumenteret endnu. Send en forespørgsel, så får du et tilbud uden betaling.', 'QUOTE_ONLY');
   const v = i.vehicle;
   const pickup = i.pickupAt instanceof Date ? i.pickupAt : new Date(i.pickupAt);
   if (isNaN(pickup.getTime())) throw new QuoteError('Ugyldigt afhentningstidspunkt');
   if (!Number.isInteger(i.pallets ?? 1) || (i.pallets ?? 1) < 1) throw new QuoteError('Mindst 1 palleplads');
   if (!Number.isInteger(i.weightKg ?? 1) || (i.weightKg ?? 1) < 1) throw new QuoteError('Vægt skal være mindst 1 kg');
-  if ((i.pallets ?? 1) > p.max_pallets) throw new QuoteError(`Maks ${p.max_pallets} pallepladser. Kontakt os for større opgaver.`, 'QUOTE_ONLY');
-  if ((i.weightKg ?? 1) > p.max_weight_kg) throw new QuoteError(`Maks ${p.max_weight_kg} kg. Kontakt os for tungere opgaver.`, 'QUOTE_ONLY');
+  const maxPal = p[`${i.vehicle}_max_pallets`] ?? p.max_pallets, maxKg = p[`${i.vehicle}_max_weight_kg`] ?? p.max_weight_kg;
+  if ((i.pallets ?? 1) > maxPal) throw new QuoteError(`Maks ${maxPal} pallepladser på denne bil. Få et tilbud i stedet.`, 'QUOTE_ONLY');
+  if ((i.weightKg ?? 1) > maxKg) throw new QuoteError(`Maks ${maxKg} kg på denne bil. Få et tilbud i stedet.`, 'QUOTE_ONLY');
   const stops = i.stops ?? 0;
   if (!Number.isInteger(stops) || stops < 0) throw new QuoteError('Ugyldigt antal ekstra stop');
   if (stops > p.max_stops) throw new QuoteError(`Maks ${p.max_stops} ekstra stop. Kontakt os for flere.`, 'QUOTE_ONLY');
@@ -107,7 +114,7 @@ export function computePrice(p, i) {
     base = Math.max(min, kmPrice);              // minimumsprisen lægges IKKE oveni
     lines.push({ key: 'transport', label: kmPrice < min ? `Transport ${km} km (minimumspris)` : `Transport ${km} km`, amount: base });
     if (stops) lines.push({ key: 'stops', label: `${stops} ekstra stop`, amount: stops * p[`${v}_stop_ore`] });
-    notes.push('Inkluderet tid pr. stop: ' + (v === 'van' ? '10' : '15') + ' min. Ekstra tid afregnes pr. påbegyndt kvarter (' + (p[`${v}_wait_ore`] / 100) + ' kr.).');
+    notes.push('Inkluderet håndtering pr. stop: ' + HANDLING_MIN[v] + ' min. Ekstra tid afregnes pr. påbegyndt kvarter (' + (p[`${v}_wait_ore`] / 100) + ' kr.).');
   } else {
     const h = i.hours;
     if (!isQuarterHours(h) || h < p.hourly_min_hours) throw new QuoteError(`Timebooking er mindst ${p.hourly_min_hours} timer (derefter pr. påbegyndt kvarter).`);
@@ -134,7 +141,7 @@ export function computePrice(p, i) {
   const exVat = lines.reduce((s, l) => s + l.amount, 0);
   const vat = eur(exVat * p.vat_percent / 100);
   notes.push('Bro-, færge- og nødvendig betalingsparkering afregnes efter dokumenteret udgift. Ventetid ud over inkluderet tid faktureres bagefter.');
-  return { lines, exVat, vat, total: exVat + vat, vatPercent: p.vat_percent, km, notes };
+  return { lines, exVat, vat, total: exVat + vat, vatPercent: p.vat_percent, km, notes, priceVersion: p.price_version ?? null };
 }
 
 /** Afbestillingsgebyr (ekskl. moms) for enkeltbookinger. dispatched = bilen er afsendt / forgæves ankomst. */

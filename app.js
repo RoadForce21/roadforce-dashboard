@@ -22,6 +22,7 @@
   // [kolonne, tekst, enhed, erBeløb(øre→kr)]; grupperet efter prislistens afsnit
   const PRICING_GROUPS = [
     ['Kassebil – A–B', [['van_min_ore', 'Minimumspris pr. tur', 'kr', true], ['van_km_ore', 'Pris pr. km', 'kr', true], ['van_stop_ore', 'Ekstra stop', 'kr', true], ['van_wait_ore', 'Ekstra tid pr. påbegyndt kvarter', 'kr', true]]],
+    ['Sprinter L2H2 – A–B (foreslåede satser 12/11; fast pris først når kapacitet er udfyldt)', [['van_large_min_ore', 'Minimumspris pr. tur', 'kr', true], ['van_large_km_ore', 'Pris pr. km', 'kr', true], ['van_large_stop_ore', 'Ekstra stop', 'kr', true], ['van_large_wait_ore', 'Ekstra tid pr. påbegyndt kvarter', 'kr', true], ['van_large_hour_ore', 'Timepris', 'kr', true], ['van_large_extra_km_ore', 'Ekstra km (timebooking)', 'kr', true], ['van_large_max_pallets', 'Dokumenteret maks. pallepladser (tom = kun tilbud)', 'stk', false], ['van_large_max_weight_kg', 'Dokumenteret maks. vægt (tom = kun tilbud)', 'kg', false]]],
     ['Mindre liftbil – A–B', [['lift_min_ore', 'Minimumspris pr. tur', 'kr', true], ['lift_km_ore', 'Pris pr. km', 'kr', true], ['lift_stop_ore', 'Ekstra stop', 'kr', true], ['lift_wait_ore', 'Ekstra tid pr. påbegyndt kvarter', 'kr', true]]],
     ['Timebooking', [['van_hour_ore', 'Kassebil – timepris', 'kr', true], ['lift_hour_ore', 'Liftbil – timepris', 'kr', true], ['hourly_min_hours', 'Minimumsbooking', 'timer', false], ['km_per_hour', 'Inkluderede km pr. time', 'km', false], ['van_extra_km_ore', 'Kassebil – ekstra km', 'kr', true], ['lift_extra_km_ore', 'Liftbil – ekstra km', 'kr', true]]],
     ['Tillæg', [['acute_percent', 'Akut', '%', false], ['acute_min_ore', 'Akut – mindstebeløb', 'kr', true], ['evening_percent', 'Hverdage 17–22', '%', false], ['night_percent', 'Nat 22–07', '%', false], ['weekend_percent', 'Weekend og helligdage', '%', false]]],
@@ -362,11 +363,11 @@
   function renderPricingForm() {
     if (!S.pricing || $('#pricing-fields').children.length) return;
     $('#pricing-fields').innerHTML = PRICING_GROUPS.map(([title, fields]) => `<h3>${esc(title)}</h3><div class="row2">` + fields.map(([k, label, unit, money]) =>
-      `<label>${esc(label)} (${esc(unit)})<input name="${k}" type="number" step="${money ? '0.5' : '1'}" min="0" required value="${money ? S.pricing[k] / 100 : S.pricing[k]}"></label>`).join('') + '</div>').join('');
+      `<label>${esc(label)} (${esc(unit)})<input name="${k}" type="number" step="${money ? '0.5' : '1'}" min="0"${/^van_large_max_/.test(k) ? '' : ' required'} value="${S.pricing[k] == null ? '' : money ? S.pricing[k] / 100 : S.pricing[k]}"></label>`).join('') + '</div>').join('');
     renderPricingExample();
   }
   function readPricing() {
-    const o = {}; for (const [k, , , money] of PRICING_FIELDS) { const v = Number($(`#pricing-form [name=${k}]`).value); o[k] = money ? Math.round(v * 100) : Math.round(v); } return o;
+    const o = {}; for (const [k, , , money] of PRICING_FIELDS) { const raw = $(`#pricing-form [name=${k}]`).value; if (raw === '' && /^van_large_max_/.test(k)) { o[k] = null; continue; } const v = Number(raw); o[k] = money ? Math.round(v * 100) : Math.round(v); } return o;
   }
   function renderPricingExample() {
     const P = window.RFPricing; if (!P) return;
