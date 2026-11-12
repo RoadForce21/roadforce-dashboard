@@ -16,20 +16,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:system-ui;max-width:760px;margin:2rem auto;padding:0 1rem;line-height:1.5}table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:4px 8px;font-size:14px}</style>
 </head>
 <body>
-<header id="title-block-header">
-<h1 class="title">Vilkår – Road Force</h1>
-</header>
 <h1 id="handels--og-transportvilkår--udkast">Handels- og transportvilkår – UDKAST</h1>
 <blockquote>
 <p><strong>Dette er et udkast til at give jeres jurist et hurtigt udgangspunkt. Det er ikke juridisk rådgivning og må ikke bruges uden gennemgang.</strong> Felter i [firkantede parenteser] skal udfyldes eller vurderes af jurist/forsikringsselskab. Prisregler er hentet fra jeres prisliste.</p>
 </blockquote>
-<p><strong>Version:</strong> 2026-11 (skal matche <code>TERMS_VERSION</code> i <code>customer-app/src/config.js</code> – ændr begge, når vilkårene ændres)</p>
+<p><strong>Version:</strong> 2026-11-b (skal matche <code>TERMS_VERSION</code> i <code>customer-app/src/config.js</code> – ændr begge, når vilkårene ændres)</p>
 <h2 id="1-parter">1. Parter</h2>
 <p>Transporten leveres af Road Force, CVR 46697650, Blegdamsvej 82, 2100 København Ø / Næstvedgade 28, 2100 København Ø ("RoadForce"). Kunden er den person eller virksomhed, der bestiller i appen.</p>
 <h2 id="2-aftalen-og-prisen">2. Aftalen og prisen</h2>
 <ol>
 <li>En bestilling er bindende, når kunden har betalt, og RoadForce har bekræftet i appen.</li>
-<li>Prisen vises i appen før betaling og følger RoadForces gældende prisliste. Erhvervspriser vises ekskl. moms; privatpriser inkl. moms.</li>
+<li>Prisen vises i appen før betaling og følger RoadForces gældende prisliste. Priser til erhvervskunder vises ekskl. moms; priser til privatkunder vises inkl. moms.</li>
 <li>Prisen omfatter bil med én chauffør, almindelig læsning og aflæsning inden for den inkluderede tid, brændstof og leveringskvittering.</li>
 <li>Ruteafstanden beregnes ud fra den kørte rute og rundes samlet op til nærmeste hele kilometer. Ture over 100 km kræver et konkret tilbud.</li>
 <li>Ekstra ventetid ud over den inkluderede tid (10 min. pr. stop med kassebil, 15 min. med mindre liftbil), ekstra kilometer på timebooking, bro, færge og nødvendig betalingsparkering faktureres efter forbrug og dokumenteres. [Jurist: bekræft, at dette kan faktureres ud over den betalte pris.]</li>
@@ -65,18 +62,18 @@
 </tr>
 </tbody>
 </table>
-<p>Minimumsbetaling: 425 kr. (kassebil, A–B), 575 kr. (liftbil, A–B), to timers betaling ved timebooking. Gebyret kan højst udgøre den bekræftede betaling. Ved aflysning eller fejl fra RoadForces side opkræves intet. Beløb er ekskl. moms; moms tillægges. [Jurist: vurdér forbrugerrettigheder – fortrydelsesret ved fjernsalg til privatkunder og undtagelser for transportydelser på bestemt tidspunkt.]</p>
+<p>Minimumsbetaling: 425 kr. (kassebil, A–B), 575 kr. (liftbil, A–B), to timers betaling ved timebooking. Gebyret kan højst udgøre den bekræftede betaling. Ved aflysning eller fejl fra RoadForces side opkræves intet. Beløb er ekskl. moms; moms tillægges. <strong>Privatkunder – fortrydelse (forslag til kontrol):</strong> Ved fjernsalg har forbrugere som udgangspunkt 14 dages fortrydelsesret. Fortrydelsesretten gælder ikke for aftaler om transport af varer, hvis aftalen angiver en bestemt dato eller periode (forbrugeraftalelovens § 18, stk. 2, jf. direktiv 2011/83/EU art. 16). Da bestillinger i appen angiver afhentningstidspunkt, foreslås det, at kunden oplyses om dette før betaling, og at afbestillingstabellen ovenfor gælder. [Jurist: kontrollér retsgrundlaget og formuleringen af oplysningen, og at tabellen ikke indskrænker forbrugerens ufravigelige rettigheder.] Erhvervskunder har ikke fortrydelsesret, og tabellen ovenfor gælder.</p>
 <h2 id="5-ansvar-og-forsikring">5. Ansvar og forsikring</h2>
-<p>[Jurist/forsikring: indsæt transportansvar, ansvarsgrænser pr. kg/skade, reklamationsfrister og evt. henvisning til standardvilkår for vejtransport. Angiv om særskilt vareforsikring kan tilkøbes.]</p>
+<p>[Ansvarsbestemmelser udarbejdes særskilt og indsættes, når forsikringsdækning og ansvarsgrænser er bekræftet – se docs/ANSVAR_FORSLAG.md. Intet i dette afsnit er godkendt endnu.]</p>
 <h2 id="6-levering-og-kvittering">6. Levering og kvittering</h2>
 <p>Chaufføren registrerer modtagerens navn og kan tage foto af leveret gods som leveringsbevis. Kunden bør kontrollere godset ved levering og straks notere synlige skader.</p>
 <h2 id="7-betaling-og-fakturering">7. Betaling og fakturering</h2>
-<p>Kortbetaling sker i appen via Stripe. RoadForce udsteder faktura med moms. Eventuelle tillæg efter transporten faktureres med [betalingsfrist, f.eks. 8 dage netto]. [Rente/rykkergebyr efter rentelovens regler.]</p>
+<p>Kortbetaling sker i appen via Stripe. RoadForce udsteder faktura med moms. Tillæg efter transporten (ventetid, ekstra km, bro, færge, parkering) faktureres kun, når de er aftalt eller dokumenteret. Kunden kan se grundlaget (art, beskrivelse, beløb og moms) på fakturaen og i appen. Betalingsfrist for tillæg er 8 dage netto. Ved for sen betaling beregnes renter efter rentelovens regler. [Jurist: bekræft rykkergebyr og kompensationsgebyr efter rentelovens regler.]</p>
 <h2 id="8-klager-og-tvister">8. Klager og tvister</h2>
-<p>Klager sendes til telefon +45 93 98 34 34. Forbrugere kan bruge Center for Klageløsning. Dansk ret og [byret] er værneting. [Jurist: bekræft.]</p>
+<p>Klager og spørgsmål sendes til <a href="mailto:road21force@gmail.com">road21force@gmail.com</a> eller telefon +45 93 98 34 34. Forbrugere kan bruge Center for Klageløsning. Over for erhvervskunder er Københavns Byret værneting, med forbehold for ufravigelige regler. Privatkunders lovpligtige rettigheder, herunder værneting, berøres ikke. [Jurist: bekræft.]</p>
 <h2 id="9-persondata">9. Persondata</h2>
 <p>Se privatlivspolitikken.</p>
 <h2 id="10-ændringer">10. Ændringer</h2>
-<p>RoadForce kan ændre vilkårene med [varsel]. Kunden skal acceptere nye vilkår ved næste bestilling.</p>
+<p>RoadForce kan ændre vilkårene med 14 dages varsel for fremtidige bestillinger. Ændringer gælder ikke for allerede indgåede aftaler. Kunden skal acceptere nye vilkår ved næste bestilling.</p>
 </body>
 </html>
