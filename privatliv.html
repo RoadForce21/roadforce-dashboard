@@ -18,7 +18,7 @@
 <body>
 <h1 id="privatlivspolitik--udkast">Privatlivspolitik – UDKAST</h1>
 <blockquote>
-<p><strong>Udkast til gennemgang af jurist/databeskyttelsesrådgiver. Ikke juridisk rådgivning.</strong> [Felter i parentes udfyldes.]</p>
+<p><strong>Udkast til gennemgang af jurist/databeskyttelsesrådgiver. Ikke juridisk rådgivning.</strong> [Punkter i firkantede parenteser er endnu ikke afklaret.]</p>
 </blockquote>
 <h2 id="hvem-er-dataansvarlig">Hvem er dataansvarlig?</h2>
 <p>Road Force, CVR 46697650, Blegdamsvej 82, 2100 København Ø / Næstvedgade 28, 2100 København Ø, <a href="mailto:road21force@gmail.com">road21force@gmail.com</a>. Kontakt os om dine data: <a href="mailto:road21force@gmail.com">road21force@gmail.com</a>.</p>
@@ -43,7 +43,7 @@
 <td>Afhentnings-/leveringsadresser, godsbeskrivelse, tidspunkt, pris</td>
 <td>Udføre og dokumentere transporten</td>
 <td>Kontrakt</td>
-<td>Forslag: 5 år (bogføringsloven) – kan indstilles</td>
+<td>5 år fra regnskabsårets udgang (bogføringsloven)</td>
 </tr>
 <tr class="odd">
 <td>Betalingsoplysninger</td>
@@ -55,36 +55,42 @@
 <td>Fakturaer og bogføringsbilag</td>
 <td>Overholde bogføringsloven</td>
 <td>Retlig forpligtelse (litra c)</td>
-<td>Forslag: 5 år efter regnskabsårets udløb – kan indstilles</td>
+<td>5 år fra regnskabsårets udgang</td>
 </tr>
 <tr class="odd">
 <td>Chaufførens position under aktiv tur (vises for kunden og kontoret)</td>
 <td>Sporing af leveringen</td>
-<td>Kontrakt / legitim interesse (litra f)</td>
-<td>Slettes, når turen er leveret</td>
+<td>Legitim interesse (litra f)</td>
+<td>Detaljeret GPS-historik slettes efter 30 dage</td>
 </tr>
 <tr class="even">
-<td>Leveringsfoto og modtagernavn</td>
-<td>Leveringsbevis</td>
-<td>Legitim interesse</td>
-<td>Forslag: 12 måneder – kan indstilles</td>
+<td>Adgangs- og sikkerhedslogs</td>
+<td>Sikkerhed og fejlfinding</td>
+<td>Legitim interesse (litra f)</td>
+<td>90 dage</td>
 </tr>
 <tr class="odd">
+<td>Leveringsfoto og modtagernavn</td>
+<td>Leveringsbevis og dokumentation ved skade/klage</td>
+<td>Legitim interesse (litra f)</td>
+<td>90 dage efter levering. I konkrete klage- eller skadesager kan materiale opbevares længere med registreret begrundelse</td>
+</tr>
+<tr class="even">
 <td>Push-token</td>
 <td>Sende statusbeskeder</td>
 <td>Kontrakt</td>
 <td>Til du logger ud/sletter konto</td>
 </tr>
-<tr class="even">
-<td>Tilbudsforespørgsler</td>
+<tr class="odd">
+<td>Tilbudsforespørgsler uden efterfølgende ordre</td>
 <td>Besvare din forespørgsel</td>
 <td>Foranstaltning forud for kontrakt (litra b)</td>
-<td>Forslag: 12 måneder – kan indstilles</td>
+<td>6 måneder fra sidste kontakt</td>
 </tr>
 </tbody>
 </table>
 <h2 id="hvem-modtager-oplysninger">Hvem modtager oplysninger?</h2>
-<p>Databehandlere: Supabase (database og login, region [EU]), Stripe (betaling), Google (kort og adresseopslag), Expo (push-beskeder og appopdateringer). [Jurist: indgå/kontrollér databehandleraftaler og overførselsgrundlag ved evt. overførsel uden for EU/EØS.]</p>
+<p>Databehandlere: Supabase (database og login, region verificeret: West EU (Ireland)), Stripe (betaling), Google (kort og adresseopslag), Expo (push-beskeder og appopdateringer). Stripe, Google og Expo er internationale leverandører, og oplysninger kan blive behandlet uden for EU/EØS. Databehandleraftaler og overførselsgrundlag (fx EU-Kommissionens standardkontraktbestemmelser) er endnu ikke verificeret for hver leverandør. [Afventer kontrol, før åbning for kunder.]</p>
 <h2 id="dine-rettigheder">Dine rettigheder</h2>
 <p>Indsigt, berigtigelse, sletning, begrænsning, dataportabilitet og indsigelse. Du kan slette din konto direkte i appen ("Slet min konto"). Ordrer og fakturaer gemmes anonymt, så længe bogføringsloven kræver det. Klager kan sendes til Datatilsynet (datatilsynet.dk).</p>
 <h2 id="chauffører">Chauffører</h2>
