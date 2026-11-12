@@ -37,6 +37,7 @@
     $('#login-error').textContent = 'config.js mangler. Kopiér config.example.js til config.js og udfyld den.';
     return;
   }
+  const IS_RECOVERY = /type=recovery/.test(location.hash);
   S.sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
 
   $('#login-form').addEventListener('submit', async (e) => {
@@ -48,12 +49,12 @@
     boot();
   });
   $('#logout').addEventListener('click', async () => { await S.sb.auth.signOut(); location.reload(); });
-  S.sb.auth.getSession().then(({ data }) => { if (data.session) boot(); });
+  S.sb.auth.getSession().then(({ data }) => { if (IS_RECOVERY) { showRecovery(); return; } if (data.session) boot(); });
 
   // Nulstil adgangskode: Supabase sender brugeren hertil med et recovery-link.
   S.sb.auth.onAuthStateChange((event) => { if (event === 'PASSWORD_RECOVERY') showRecovery(); });
   function showRecovery() {
-    $('#login-form').hidden = true;
+    $('#shell').hidden = true; $('#login').hidden = false; $('#login-form').hidden = true;
     let f = document.getElementById('recovery-form');
     if (f) return;
     f = document.createElement('form');
