@@ -289,6 +289,7 @@
       <label>Status<select class="inq-status"><option value="open"${q.status === 'open' ? ' selected' : ''}>Åben</option><option value="answered"${q.status === 'answered' ? ' selected' : ''}>Besvaret</option><option value="offered"${q.status === 'offered' ? ' selected' : ''} disabled>Tilbud sendt</option><option value="accepted"${q.status === 'accepted' ? ' selected' : ''} disabled>Accepteret</option><option value="closed"${q.status === 'closed' ? ' selected' : ''}>Lukket</option></select></label>
       <label>Intern note / tilbudt pris<input class="inq-note" maxlength="1000" value="${esc(q.admin_note || '')}"></label>
       <button class="btn small inq-save">Gem</button>
+      ${q.status === 'offered' || q.status === 'accepted' ? `<p class="muted">E-mail: ${q.offer_email_sent_at ? 'sendt ' + esc(dt(q.offer_email_sent_at)) : 'ikke sendt' + (q.offer_email_error ? ' (' + esc(q.offer_email_error) + ')' : '')}</p>` : ''}
       ${q.order_id ? '<p class="muted">Tilbuddet er brugt til en ordre.</p>' : `<details style="margin-top:8px"><summary>${q.status === 'offered' ? 'Tilbud sendt – ret/send igen' : q.status === 'accepted' ? 'Accepteret ' + esc(dt(q.accepted_at)) + ' (vilkår ' + esc(q.accepted_terms_version || '?') + ')' : 'Lav tilbud til kunden'}</summary>
         <label>Pris ekskl. moms (kr)<input class="of-price" type="number" min="1" step="1" value="${q.offer_ex_vat ? q.offer_ex_vat / 100 : ''}"></label>
         <label>Afhentning<input class="of-pickup" type="datetime-local" value="${q.offer_pickup_at ? new Date(new Date(q.offer_pickup_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''}"></label>
@@ -300,7 +301,10 @@
     $$('#inq-list [data-inq] .of-send').forEach((btn) => btn.addEventListener('click', async () => {
       const el = btn.closest('[data-inq]'); const v = (c) => el.querySelector(c).value;
       const { error } = await S.sb.rpc('admin_send_offer', { p_id: el.dataset.inq, p_ex_vat: Math.round(parseFloat(v('.of-price')) * 100), p_note: v('.of-note') || null, p_pickup_at: new Date(v('.of-pickup')).toISOString(), p_pallets: parseInt(v('.of-pal'), 10), p_weight_kg: parseInt(v('.of-kg'), 10), p_valid_until: new Date(v('.of-valid')).toISOString() });
-      if (error) alert('Tilbuddet blev ikke sendt: ' + error.message); else { await loadInquiries(); renderInquiries(); }
+      if (error) { alert('Tilbuddet blev ikke sendt: ' + error.message); return; }
+      const m = await S.sb.functions.invoke('notify-offer', { body: { inquiry_id: el.dataset.inq } });
+      alert(m.error ? 'Tilbuddet er gemt og kan ses i kundens app, men e-mailen kunne ikke sendes.' : m.data?.sent ? 'Tilbuddet er sendt på e-mail og kan ses i kundens app.' : 'Tilbuddet er gemt og kan ses i kundens app. E-mail er ikke sendt (' + (m.data?.reason === 'MAIL_IKKE_KONFIGURERET' ? 'mailtjenesten er endnu ikke sat op' : m.data?.reason || 'ukendt årsag') + ').');
+      await loadInquiries(); renderInquiries();
     }));
     $$('#inq-list [data-inq]').forEach((el) => el.querySelector('.inq-save').addEventListener('click', async () => {
       const { error } = await S.sb.from('quote_inquiries').update({ status: el.querySelector('.inq-status').value, admin_note: el.querySelector('.inq-note').value.trim() || null }).eq('id', el.dataset.inq);
