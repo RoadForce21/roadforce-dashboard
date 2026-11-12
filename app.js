@@ -312,10 +312,11 @@
   function renderVehicles() {
     const el = $('#veh-list'); if (!el || !S.vehicles) return;
     if (el.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
-    el.innerHTML = S.vehicles.map((v) => `<div class="card" style="margin-bottom:12px" data-veh="${v.id}"><b>${esc(v.name)}</b> <span class="muted">${v.bookable ? 'Kan bestilles med fast pris' : 'Få et tilbud'}${v.verified ? ' · verificeret' : ' · ikke verificeret'}</span>
+    el.innerHTML = S.vehicles.map((v) => `<div class="card" style="margin-bottom:12px" data-veh="${v.id}"><b>${esc(v.name)}</b> <span class="muted">${v.bookable ? 'Kan bestilles med fast pris' : 'Få et tilbud'}${v.verified ? ' · verificeret' : ' · ikke verificeret'}${v.mapping_note || v.mapping_confirmed === false ? (v.mapping_confirmed ? ' · kobling bekræftet' : ' · <b>kobling til prisliste ubekræftet</b>') : ''}</span>
       ${v.mapping_note ? `<p class="muted">${esc(v.mapping_note)}</p>` : ''}
       ${VEH_FIELDS.map(([k, l]) => `<label>${l}<input data-f="${k}" value="${esc(v[k] || '')}" maxlength="200"></label>`).join('')}
       <label><input type="checkbox" data-f="bookable"${v.bookable ? ' checked' : ''}> Kan bestilles med fast pris (kun hvis prisen er dokumenteret)</label>
+      ${v.mapping_note ? `<label><input type="checkbox" data-f="mapping_confirmed"${v.mapping_confirmed ? ' checked' : ''}> Jeg har kontrolleret, at prisen/koblingen gælder dette køretøj</label>` : ''}
       <label><input type="checkbox" data-f="verified"${v.verified ? ' checked' : ''}> Data er verificeret mod dokumentation/opmåling</label>
       <button class="btn small veh-save">Gem</button></div>`).join('');
     $$('#veh-list [data-veh]').forEach((c) => c.querySelector('.veh-save').addEventListener('click', async () => {
@@ -324,6 +325,17 @@
       if (error) alert(error.message); else { await loadVehicles(); renderVehicles(); }
     }));
   }
+
+  // ───────────── Dataopbevaring (kun prøvekørsel – sletter intet) ─────────────
+  async function runRetentionPreview() {
+    const out = $('#ret-out'); out.textContent = 'Kører prøvekørsel…';
+    const { data, error } = await S.sb.rpc('admin_retention_preview');
+    let html = error ? `<p class="muted">Fejl: ${esc(error.message)}</p>` : '<ul>' + (data || []).map((r) => `<li>${esc(r.action)}: <b>${esc(String(r.affected))}</b></li>`).join('') + '</ul>';
+    const f = await S.sb.functions.invoke('purge-storage', { body: { dry_run: true } });
+    html += f.error ? '<p class="muted">Storage-prøvekørsel kunne ikke køres.</p>' : `<p>Storage (prøve): ${esc(String(f.data.would_remove ?? 0))} fil(er) ville blive slettet, ${esc(String(f.data.protected ?? 0))} beskyttet.</p>`;
+    out.innerHTML = html + '<p class="muted">Prøvekørsel – der er ikke slettet noget.</p>';
+  }
+  document.addEventListener('click', (e) => { if (e.target && e.target.id === 'ret-preview') runRetentionPreview(); });
 
   // ───────────── Firmaoplysninger (til faktura) ─────────────
   const COMPANY_FIELDS = [['name', 'Firmanavn'], ['cvr', 'CVR'], ['address', 'Adresse'], ['email', 'E-mail'], ['phone', 'Telefon'], ['bank_info', 'Bankoplysninger (reg./konto eller IBAN)'], ['invoice_footer', 'Fakturatekst (fx betalingsfrist)']];
