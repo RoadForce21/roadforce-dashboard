@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>RoadForce · Driftscenter</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<section id="login" class="login">
+  <form id="login-form" class="login-card" autocomplete="on">
+    <img src="logo.png" alt="RoadForce" class="login-logo">
+    <h1>Driftscenter</h1>
+    <p class="muted">Kun for RoadForce-administratorer.</p>
+    <label>E-mail<input id="login-email" type="email" required autocomplete="username"></label>
+    <label>Adgangskode<input id="login-password" type="password" required autocomplete="current-password"></label>
+    <button class="btn primary" type="submit">Log ind</button>
+    <p id="login-error" class="error" role="alert"></p>
+  </form>
+</section>
+
+<div id="shell" class="shell" hidden>
+  <aside class="side">
+    <img src="logo.png" alt="RoadForce" class="side-logo">
+    <nav id="nav">
+      <button data-view="map" class="active">🗺️ Live-kort</button>
+      <button data-view="orders">📦 Ordrer <span id="badge-new" class="badge" hidden></span></button>
+      <button data-view="inquiries">✉️ Tilbud <span id="badge-inq" class="badge" hidden></span></button>
+      <button data-view="drivers">🚚 Chauffører</button>
+      <button data-view="pricing">💰 Priser</button>
+    </nav>
+    <div class="side-foot">
+      <div id="who" class="muted"></div>
+      <button id="logout" class="btn ghost small">Log ud</button>
+      <div id="conn" class="conn">● Forbinder…</div>
+    </div>
+  </aside>
+
+  <main>
+    <!-- Live-kort -->
+    <section id="view-map" class="view">
+      <div class="map-wrap">
+        <div id="map"></div>
+        <div class="map-tools">
+          <label class="chip"><input type="checkbox" id="t-traffic"> Trafik på vejnettet</label>
+          <label class="chip"><input type="checkbox" id="t-dark" checked> Mørkt kort</label>
+          <label class="chip"><input type="checkbox" id="t-drivers" checked> Chauffører</label>
+          <label class="chip"><input type="checkbox" id="t-orders" checked> Ordrer</label>
+        </div>
+        <aside class="map-panel">
+          <h3>Skal tildeles <span id="count-new" class="badge"></span></h3>
+          <div id="panel-new"></div>
+          <h3>Undervejs</h3>
+          <div id="panel-active"></div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Ordrer -->
+    <section id="view-orders" class="view" hidden>
+      <header class="bar">
+        <h2>Ordrer</h2>
+        <select id="filter-status">
+          <option value="">Alle statusser</option>
+        </select>
+        <input id="filter-q" type="search" placeholder="Søg ordre, adresse, kunde…">
+      </header>
+      <div class="table-wrap"><table id="orders-table"><thead><tr>
+        <th>Ordre</th><th>Kunde</th><th>Rute</th><th>Afhentning</th><th>Pris</th><th>Status</th><th>Chauffør</th>
+      </tr></thead><tbody></tbody></table></div>
+    </section>
+
+    <!-- Tilbud -->
+    <section id="view-inquiries" class="view" hidden>
+      <header class="bar"><h2>Tilbudsforespørgsler</h2></header>
+      <div class="narrow" id="inq-list"></div>
+    </section>
+
+    <!-- Chauffører -->
+    <section id="view-drivers" class="view" hidden>
+      <header class="bar"><h2>Chauffører</h2></header>
+      <div class="cols">
+        <div class="card"><h3>Aktive chauffører</h3><div id="drivers-list"></div></div>
+        <form id="driver-form" class="card" autocomplete="off">
+          <h3>Opret chauffør</h3>
+          <label>Navn<input name="full_name" required minlength="2"></label>
+          <label>E-mail<input name="email" type="email" required></label>
+          <label>Telefon<input name="phone" type="tel"></label>
+          <label>Startadgangskode (min. 10 tegn)<input name="password" type="text" required minlength="10"></label>
+          <button class="btn primary" type="submit">Opret chauffør</button>
+          <p id="driver-msg" class="muted"></p>
+        </form>
+      </div>
+    </section>
+
+    <!-- Priser -->
+    <section id="view-pricing" class="view" hidden>
+      <header class="bar"><h2>Priser</h2></header>
+      <form id="pricing-form" class="card narrow">
+        <p class="muted">Alle priser i kroner <b>ekskl. moms</b>. Prisen beregnes på serveren for hver bestilling. Standardtallene er jeres prisliste. Fast aftalepris, fuldmagts-/specialopgaver og ture over grænsen gives som tilbud.</p>
+        <div id="pricing-fields"></div>
+        <button class="btn primary" type="submit">Gem priser</button>
+        <p id="pricing-msg" class="muted"></p>
+        <div class="example" id="pricing-example"></div>
+      </form>
+      <form id="company-form" class="card narrow">
+        <h3>Firmaoplysninger (på fakturaer)</h3>
+        <div id="company-fields"></div>
+        <button class="btn primary" type="submit">Gem firmaoplysninger</button>
+        <p id="company-msg" class="muted"></p>
+      </form>
+    </section>
+  </main>
+
+  <!-- Ordre-detalje -->
+  <aside id="drawer" class="drawer" hidden>
+    <button id="drawer-close" class="btn ghost small">Luk ✕</button>
+    <div id="drawer-body"></div>
+  </aside>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script type="module">import * as P from './pricing.js'; window.RFPricing = P; window.dispatchEvent(new Event('rf-pricing'));</script>
+<script type="module">import * as I from './invoice.js'; window.RFInvoice = I;</script>
+<script src="app.js"></script>
+</body>
+</html>
