@@ -68,7 +68,7 @@ function authView(mode = 'login', msg = '') {
     ev.preventDefault(); const f = ev.target; const btn = f.querySelector('button:not([data-m])'); btn.disabled = true; $('#ae').textContent = '';
     if (su) {
       const k = f.kind.value;
-      const { data, error } = await sb.auth.signUp({ email: f.email.value.trim(), password: f.pw.value, options: { data: { full_name: f.name.value.trim(), phone: f.phone.value.trim(), kind: k, company: k === 'business' ? f.company.value.trim() : null, cvr: k === 'business' ? f.cvr.value.trim() : null, billing_address: (f.billing?.value || '').trim() || null, terms_accepted: 'true', terms_version: TERMS_VERSION } } });
+      const { data, error } = await sb.auth.signUp({ email: f.email.value.trim(), password: f.pw.value, options: { emailRedirectTo: location.origin + location.pathname, data: { full_name: f.name.value.trim(), phone: f.phone.value.trim(), kind: k, company: k === 'business' ? f.company.value.trim() : null, cvr: k === 'business' ? f.cvr.value.trim() : null, billing_address: (f.billing?.value || '').trim() || null, terms_accepted: 'true', terms_version: TERMS_VERSION } } });
       btn.disabled = false;
       if (error) return ($('#ae').textContent = /registered|already/i.test(error.message) ? 'Der findes allerede en konto med den e-mail.' : /password/i.test(error.message) ? 'Adgangskoden er for svag. Brug mindst 8 tegn.' : 'Kunne ikke oprette konto. Tjek oplysningerne.');
       if (!data.session) return authView('login', 'Tjek din e-mail og bekræft kontoen. Log derefter ind.');
