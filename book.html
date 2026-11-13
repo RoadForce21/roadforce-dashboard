@@ -97,21 +97,21 @@ async function newOrder(prefill) {
   const now = new Date(Date.now() + 3 * 3600e3); now.setMinutes(0, 0, 0);
   const iso = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   app.innerHTML = `<div class="card"><h2>Ny bestilling</h2><form id="nf" style="display:grid;gap:10px">
-    <label>Type<select name="service"><option value="route">Transport fra A til B</option><option value="hourly">Timebooking</option></select></label>
+    <input type="hidden" name="service" value="route">
     <label>Køretøj<select name="vehicle">${(vt || []).filter((v) => v.bookable).map((v) => `<option value="${v.kind}">${esc(v.name)}</option>`).join('')}</select></label>
     <label>Afhentningsadresse (vej, nummer, postnummer, by)<input name="from" required minlength="5"></label>
     <label id="lto">Leveringsadresse<input name="to" minlength="5"></label>
-    <label id="lh" hidden>Antal timer<input name="hours" type="number" min="1" max="12" value="2"></label>
+    
     <label>Afhentningstidspunkt<input name="pickup" type="datetime-local" required value="${iso}" min="${iso}"></label>
     <div class="row"><label style="flex:1">Paller<input name="pallets" type="number" min="0" max="12" value="1"></label><label style="flex:1">Vægt (kg)<input name="weight" type="number" min="1" value="100"></label></div>
     <label>Hvad skal transporteres?<textarea name="goods" required minlength="3" rows="2"></textarea></label>
     <button>Se pris</button><div class="err" id="ne"></div><div id="qo"></div></form></div><button class="ghost" id="back">Tilbage</button>`;
-  const f = $('#nf'); const sync = () => { const h = f.service.value === 'hourly'; $('#lto').hidden = h; $('#lh').hidden = !h; f.to.required = !h; }; f.service.onchange = sync; sync();
+  const f = $('#nf'); f.to.required = true;
   $('#back').onclick = () => home();
   f.onsubmit = async (ev) => {
     ev.preventDefault(); const btn = f.querySelector('button'); $('#ne').textContent = ''; $('#qo').innerHTML = ''; btn.disabled = true;
-    const hourly = f.service.value === 'hourly';
-    const body = { service: f.service.value, vehicle: f.vehicle.value, from: f.from.value.trim(), to: hourly ? '' : f.to.value.trim(), stops: [], hours: hourly ? parseInt(f.hours.value, 10) : null, extra_man_hours: 0, pallets: parseInt(f.pallets.value, 10), weight_kg: parseInt(f.weight.value, 10), goods: f.goods.value.trim(), pickup_at: new Date(f.pickup.value).toISOString() };
+    const hourly = false;
+    const body = { service: f.service.value, vehicle: f.vehicle.value, from: f.from.value.trim(), to: hourly ? '' : f.to.value.trim(), stops: [], hours: null, extra_man_hours: 0, pallets: parseInt(f.pallets.value, 10), weight_kg: parseInt(f.weight.value, 10), goods: f.goods.value.trim(), pickup_at: new Date(f.pickup.value).toISOString() };
     pending = body;
     const { data, error } = await sb.functions.invoke('quote', { body });
     btn.disabled = false;
