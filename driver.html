@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Road Force – chauffør</title>
+<style>
+:root{--bg:#0b0d10;--card:#14171c;--card2:#1b2027;--line:#262b34;--text:#f5f5f2;--muted:#8c94a3;--blue:#255cff;--green:#1f9d5b;--red:#ff5d5d;--amber:#f5b83d}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:560px;margin:0 auto;padding:14px 16px 60px;display:grid;gap:12px}
+.top{display:flex;justify-content:space-between;align-items:center}.logo{font-weight:800;letter-spacing:.04em}.logo b{color:var(--green)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;display:grid;gap:10px}
+h2,h3{margin:0}h2{font-size:20px}h3{font-size:16px}.muted{color:var(--muted);font-size:14px}.row{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+label{display:grid;gap:4px;font-size:14px;color:var(--muted)}
+input,select,textarea{width:100%;background:var(--card2);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:12px;font:inherit}
+button,a.btn{background:var(--green);color:#fff;border:0;border-radius:12px;padding:13px 16px;font:inherit;font-weight:700;cursor:pointer;text-decoration:none;text-align:center;display:block}
+button.ghost,a.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}button.bad{background:var(--red)}button:disabled{opacity:.5}
+.pill{display:inline-block;border-radius:999px;padding:3px 12px;font-size:13px;font-weight:700;background:rgba(37,92,255,.16);color:#9db6ff}.pill.good{background:rgba(47,207,122,.16);color:#7fe3ad}.pill.low{background:rgba(255,93,93,.16);color:#ff9a9a}
+.err{color:var(--red)}.notice{border-left:3px solid var(--amber);padding-left:10px;color:var(--muted);font-size:14px}[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <div class="top"><div class="logo">ROAD<b>FORCE</b> <span class="muted">chauffør</span></div><button class="ghost" id="out" hidden>Log ud</button></div>
+  <div id="app"></div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script>
+(() => {
+const CFG = window.RF_CONFIG;
+const sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const app = $('#app');
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const dt = (i) => new Date(i).toLocaleString('da-DK', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+const hm = (i) => new Date(i).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
+const ST = { assigned: 'Tildelt', loaded: 'Afhentet', in_transit: 'Undervejs', delivered: 'Leveret' };
+const NEXT = { assigned: ['loaded', 'Afhentet – godset er lastet'], loaded: ['in_transit', 'Kør mod levering'], in_transit: ['delivered', 'Afleveret'] };
+const XS = { proposed: 'Afventer kontoret', awaiting_customer: 'Sendt til kunden', customer_accepted: 'Godkendt af kunden', customer_declined: 'Afvist af kunden', rejected: 'Afvist af kontoret' };
+let me = null, geoWatch = null, lastSent = 0, sharing = false;
+
+// ───────────── Position (kun mens siden er åben) ─────────────
+function startShare() {
+  if (geoWatch != null || !navigator.geolocation) return;
+  geoWatch = navigator.geolocation.watchPosition(async (p) => {
+    if (Date.now() - lastSent < 20000) return; lastSent = Date.now();
+    const c = p.coords;
+    await sb.from('driver_positions').upsert({ driver_id: me.id, lat: c.latitude, lon: c.longitude, accuracy: c.accuracy ?? null, heading: c.heading ?? null, speed: c.speed ?? null, updated_at: new Date().toISOString() });
+  }, () => {}, { enableHighAccuracy: true, maximumAge: 10000 });
+  sharing = true;
+}
+async function stopShare() { if (geoWatch != null) navigator.geolocation.clearWatch(geoWatch); geoWatch = null; sharing = false; await sb.from('driver_positions').delete().eq('driver_id', me.id); }
+
+// ───────────── Login ─────────────
+function login(msg = '') {
+  $('#out').hidden = true;
+  app.innerHTML = `<form id="lf" class="card"><h2>Log ind</h2><label>E-mail<input name="e" type="email" required autocomplete="email"></label><label>Adgangskode<input name="p" type="password" required autocomplete="current-password"></label><button>Log ind</button><div class="err" id="le">${esc(msg)}</div></form>`;
+  $('#lf').onsubmit = async (ev) => { ev.preventDefault(); const f = ev.target; const { error } = await sb.auth.signInWithPassword({ email: f.e.value.trim(), password: f.p.value }); if (error) return ($('#le').textContent = 'Forkert e-mail eller adgangskode.'); boot(); };
+}
+
+// ───────────── Ture ─────────────
+async function trips() {
+  $('#out').hidden = false;
+  const { data } = await sb.from('orders').select('*').eq('driver_id', me.id).in('status', ['assigned', 'loaded', 'in_transit']).order('pickup_at');
+  app.innerHTML = `<div class="card"><div class="row"><b>Del min position</b><button class="ghost" id="sh" style="padding:8px 14px">${sharing ? 'Slå fra' : 'Slå til'}</button></div><div class="muted">Positionen deles kun, mens denne side er åben på telefonen. Hold skærmen tændt under kørsel.</div></div>` +
+    ((data || []).map((o) => `<div class="card" data-o="${o.id}" style="cursor:pointer"><div class="row"><b>${esc(o.ref)}</b><span class="pill">${esc(ST[o.status])}</span></div><div>${esc(o.from_address)}</div>${o.to_address ? `<div class="muted">→ ${esc(o.to_address)}</div>` : '<div class="muted">Timebooking</div>'}<div class="muted">${esc(dt(o.pickup_at))}</div></div>`).join('') || '<div class="card muted">Ingen aktive ture lige nu. Siden opdateres, når kontoret tildeler dig en tur.</div>') +
+    '<button class="ghost" id="rl">Opdatér</button>';
+  $('#sh').onclick = async () => { if (sharing) await stopShare(); else startShare(); trips(); };
+  $('#rl').onclick = trips; $$('[data-o]').forEach((c) => c.onclick = () => trip(c.dataset.o));
+}
+
+async function upload(file, name) {
+  const path = `${me.id}/${name}-${Date.now()}.jpg`;
+  const { error } = await sb.storage.from('pod').upload(path, file, { contentType: file.type || 'image/jpeg' });
+  if (error) throw error; return path;
+}
+
+async function trip(id) {
+  app.innerHTML = '<p class="muted">Henter…</p>';
+  const [{ data: t }, { data: tm }, { data: ex }] = await Promise.all([sb.from('orders').select('*').eq('id', id).eq('driver_id', me.id).maybeSingle(), sb.from('trip_timings').select('*').eq('order_id', id), sb.from('order_extras').select('*').eq('order_id', id).order('created_at')]);
+  if (!t) return trips();
+  const hourly = t.service === 'hourly'; const stops = hourly ? [['pickup', 'Ved kunden']] : [['pickup', 'Afhentning'], ['delivery', 'Levering']];
+  const nxt = NEXT[t.status]; const tgt = t.status === 'assigned' ? { a: t.from_address, la: t.from_lat, lo: t.from_lon } : { a: t.to_address || t.from_address, la: t.to_lat ?? t.from_lat, lo: t.to_lon ?? t.from_lon };
+  app.innerHTML = `<button class="ghost" id="bk">← Mine ture</button>
+  <div class="card"><div class="row"><h2>${esc(t.ref)}</h2><span class="pill">${esc(ST[t.status])}</span></div>
+    <div class="muted">Afhentning</div><div>${esc(t.from_address)}</div>${t.to_address ? `<div class="muted">Levering</div><div>${esc(t.to_address)}</div>` : ''}
+    <div class="muted">${esc(dt(t.pickup_at))} · ${esc(t.goods || '')} · ${t.pallets ?? ''} pl. · ${t.weight_kg ?? ''} kg</div>
+    <a class="btn ghost" target="_blank" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(tgt.la && tgt.lo ? tgt.la + ',' + tgt.lo : tgt.a)}&travelmode=driving">Åbn rute til ${t.status === 'assigned' ? 'afhentning' : 'levering'}</a></div>
+  <div class="card"><h3>Tid på stedet og ventetid</h3><div class="muted">${hourly ? 'Timebooking: ventetid indgår i timerne og faktureres ikke særskilt.' : 'Gratis ventetid pr. stop: 15 min. Derefter 8 kr/min ekskl. moms pr. påbegyndt minut, når kunden har godkendt det.'}</div>
+    ${stops.map(([s, l]) => { const x = (tm || []).find((y) => y.stop === s); return `<div class="card" style="background:var(--card2)"><b>${l}</b><div class="muted">${x?.arrived_at ? 'Ankommet ' + hm(x.arrived_at) : 'Ikke ankommet'}${x?.handling_started_at ? ' · påbegyndt ' + hm(x.handling_started_at) : ''}${x?.handling_ended_at ? ' · færdig ' + hm(x.handling_ended_at) : ''}</div>
+      ${!x?.arrived_at ? `<button class="ghost" data-log="${s}|arrive">Ankommet</button>` : ''}${x?.arrived_at && !x?.handling_started_at ? `<button class="ghost" data-log="${s}|start">Start af/pålæsning</button>` : ''}${x?.arrived_at && !hourly ? `<button class="ghost" data-wait="${s}">Registrér ventetid</button>` : ''}</div>`; }).join('')}
+    <div id="wf"></div></div>
+  <div class="card"><h3>Udlæg og tillæg</h3><div class="muted">Bro, færge og parkering kræver bilag. Kontoret godkender, og kunden skal acceptere, før noget faktureres.</div>
+    ${(ex || []).map((e) => `<div class="line row"><span>${esc(e.kind)}: ${esc(e.description)}</span><span class="pill ${e.status === 'customer_accepted' ? 'good' : e.status.includes('declined') || e.status === 'rejected' ? 'low' : ''}">${esc(XS[e.status] || e.status)}</span></div>`).join('')}
+    <form id="xf" style="display:grid;gap:10px"><select name="k"><option value="toll">Bro/færge</option><option value="parking">Parkering</option><option value="other">Andet</option></select><input name="a" placeholder="Beløb i kr" inputmode="decimal" required><input name="d" placeholder="Beskrivelse, fx Storebæltsbroen" required minlength="2"><label>Foto af bilag<input name="f" type="file" accept="image/*" capture="environment"></label><button>Send udlæg</button><div class="err" id="xe"></div></form></div>
+  ${nxt ? (nxt[0] === 'delivered' ? `<div class="card"><h3>Aflevering</h3><label>Modtagerens navn<input id="rc" required></label><label>Foto af leveret gods (valgfrit)<input id="pf" type="file" accept="image/*" capture="environment"></label><button id="go">${nxt[1]}</button><div class="err" id="ge"></div></div>` : `<button id="go">${nxt[1]}</button><div class="err" id="ge"></div>`) : ''}`;
+  $('#bk').onclick = trips;
+  $$('[data-log]').forEach((b) => b.onclick = async () => { const [s, e] = b.dataset.log.split('|'); b.disabled = true; const { error } = await sb.rpc('driver_log_timing', { p_order: id, p_stop: s, p_event: e, p_reason: null }); if (error) alert(error.message); trip(id); });
+  $$('[data-wait]').forEach((b) => b.onclick = () => { const s = b.dataset.wait; $('#wf').innerHTML = `<div class="card" style="background:var(--card2)"><h3>Registrér ventetid</h3><div class="muted">Tiden fra ankomst til nu beregnes automatisk. Beløbet fastsættes af systemet efter prislisten.</div><label>Årsag<textarea id="wr" rows="2" placeholder="Fx godset var ikke klar, port lukket"></textarea></label><button id="ws">Send til kontoret</button><div class="err" id="we"></div></div>`;
+    $('#ws').onclick = async () => { const r = $('#wr').value.trim(); if (r.length < 3) return ($('#we').textContent = 'Skriv hvorfor der var ventetid.'); $('#ws').disabled = true;
+      let e1 = (await sb.rpc('driver_log_timing', { p_order: id, p_stop: s, p_event: 'end', p_reason: r })).error;
+      if (e1) { $('#ws').disabled = false; return ($('#we').textContent = e1.message); }
+      const { error } = await sb.rpc('driver_submit_extra', { p_order: id, p_kind: 'waiting', p_description: `Ventetid ${s === 'pickup' ? 'ved afhentning' : 'ved levering'}: ${r}`, p_amount_ore: null, p_receipt_path: null, p_paid_by: 'roadforce', p_stop: s });
+      if (error) { $('#ws').disabled = false; return ($('#we').textContent = error.message); } trip(id); }; });
+  $('#xf').onsubmit = async (ev) => { ev.preventDefault(); const f = ev.target; $('#xe').textContent = ''; const kr = parseFloat(String(f.a.value).replace(',', '.')); if (!(kr > 0)) return ($('#xe').textContent = 'Skriv beløbet i kroner.');
+    const file = f.f.files[0]; if (['toll', 'parking'].includes(f.k.value) && !file) return ($('#xe').textContent = 'Tag et foto af kvitteringen.'); f.querySelector('button').disabled = true;
+    let path = null; try { if (file) path = await upload(file, 'receipt-' + id); } catch { f.querySelector('button').disabled = false; return ($('#xe').textContent = 'Bilaget kunne ikke uploades. Prøv igen.'); }
+    const { error } = await sb.rpc('driver_submit_extra', { p_order: id, p_kind: f.k.value, p_description: f.d.value.trim(), p_amount_ore: Math.round(kr * 100), p_receipt_path: path, p_paid_by: 'roadforce', p_stop: null });
+    if (error) { f.querySelector('button').disabled = false; return ($('#xe').textContent = error.message); } trip(id); };
+  const go = $('#go'); if (go) go.onclick = async () => {
+    const del = nxt[0] === 'delivered'; let recipient = null, photo = null;
+    if (del) { recipient = $('#rc').value.trim(); if (!recipient) return ($('#ge').textContent = 'Skriv navnet på den, der modtog godset.'); }
+    go.disabled = true; $('#ge').textContent = '';
+    try { if (del && $('#pf').files[0]) photo = await upload($('#pf').files[0], 'pod-' + id); } catch { go.disabled = false; return ($('#ge').textContent = 'Fotoet kunne ikke uploades. Prøv igen, eller aflever uden foto.'); }
+    const { error } = await sb.rpc('driver_set_status', { p_order: id, p_status: nxt[0], p_recipient: recipient, p_note: null, p_photo: photo });
+    if (error) { go.disabled = false; return ($('#ge').textContent = error.message); }
+    if (del) trips(); else trip(id); };
+}
+
+async function boot() {
+  const { data: { session } } = await sb.auth.getSession(); if (!session) return login();
+  const { data: p } = await sb.from('profiles').select('id,role,full_name,active,subcontractor_id').eq('id', session.user.id).single();
+  if (!p || p.role !== 'driver' || !p.active) { await sb.auth.signOut(); return login('Denne side er til chauffører.'); }
+  me = p; trips();
+}
+$('#out').onclick = async () => { await stopShare().catch(() => {}); await sb.auth.signOut(); login(); };
+boot(); setInterval(() => { if (me && !document.hidden && $('#rl')) trips(); }, 60000);
+})();
+</script>
+</body>
+</html>

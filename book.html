@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Road Force – bestil transport</title>
+<style>
+:root{--bg:#0b0d10;--card:#14171c;--card2:#1b2027;--line:#262b34;--text:#f5f5f2;--muted:#8c94a3;--blue:#255cff;--green:#2fcf7a;--red:#ff5d5d;--amber:#f5b83d}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:560px;margin:0 auto;padding:14px 16px 60px;display:grid;gap:12px}
+.top{display:flex;justify-content:space-between;align-items:center}.logo{font-weight:800;letter-spacing:.04em}.logo b{color:var(--blue)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;display:grid;gap:10px}
+h1,h2,h3{margin:0}h2{font-size:20px}h3{font-size:16px}.muted{color:var(--muted);font-size:14px}.row{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+label{display:grid;gap:4px;font-size:14px;color:var(--muted)}
+input,select,textarea{width:100%;background:var(--card2);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:12px;font:inherit}
+button{background:var(--blue);color:#fff;border:0;border-radius:12px;padding:13px 16px;font:inherit;font-weight:700;cursor:pointer}
+button.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}button.ok{background:var(--green);color:#06210f}button.bad{background:var(--red)}button:disabled{opacity:.5}
+.pill{display:inline-block;border-radius:999px;padding:3px 12px;font-size:13px;font-weight:700;background:rgba(37,92,255,.16);color:#9db6ff}.pill.good{background:rgba(47,207,122,.16);color:#7fe3ad}.pill.wait{background:rgba(245,184,61,.16);color:#f5b83d}.pill.low{background:rgba(255,93,93,.16);color:#ff9a9a}
+.err{color:var(--red)}.notice{border-left:3px solid var(--amber);padding-left:10px;color:var(--muted);font-size:14px}
+.line{display:flex;justify-content:space-between;gap:12px}.tabs{display:flex;gap:8px}.tabs button{flex:1}
+#pay-el{background:#fff;border-radius:12px;padding:12px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <div class="top"><div class="logo">ROAD<b>FORCE</b></div><div><button class="ghost" id="nav-out" hidden>Log ud</button></div></div>
+  <div id="app"></div>
+  <p class="muted">Road Force · RoadForce ApS · CVR 46697650 · <a style="color:#9db6ff" href="mailto:kontakt@roadforce.dk">kontakt@roadforce.dk</a> · <a style="color:#9db6ff" href="vilkaar.html">Vilkår</a> · <a style="color:#9db6ff" href="privatliv.html">Privatliv</a></p>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://js.stripe.com/v3/"></script>
+<script src="config.js"></script>
+<script src="web-config.js"></script>
+<script>
+(() => {
+const CFG = window.RF_CONFIG, TERMS_VERSION = '2026-11-c';
+const sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const app = $('#app');
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const kr = (ore) => (ore / 100).toLocaleString('da-DK', { minimumFractionDigits: ore % 100 ? 2 : 0, maximumFractionDigits: 2 }) + ' kr.';
+const dt = (i) => new Date(i).toLocaleString('da-DK', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+const city = (a) => { const p = String(a || '').split(','); return (p[p.length - 2] || p[0] || '').replace(/^\s*\d{4}\s*/, '').trim() || a; };
+const STATUS = { awaiting_payment: ['Afventer betaling', 'low'], new: ['Bekræftet – vi finder en chauffør', ''], assigned: ['Chauffør tildelt', ''], loaded: ['Afhentet', ''], in_transit: ['Undervejs', ''], delivered: ['Leveret', 'good'], cancelled: ['Annulleret', 'low'] };
+const statusOf = (o) => (o.status === 'new' && !o.approved_at ? ['Afventer godkendelse hos Road Force', 'wait'] : STATUS[o.status] || [o.status, '']);
+const KIND = { waiting: 'Ventetid', extra_km: 'Ekstra km', toll: 'Bro/færge', parking: 'Parkering', other: 'Tillæg' };
+let me = null, stripe = null, elements = null, quote = null, pending = null;
+
+async function fnErr(e) { try { const j = await e.context.json(); return { message: j.error || 'Fejl', code: j.code, quote: j.quote }; } catch { return { message: e.message || 'Fejl' }; } }
+
+// ───────────── Login / oprettelse ─────────────
+function authView(mode = 'login', msg = '') {
+  $('#nav-out').hidden = true;
+  const su = mode === 'signup';
+  app.innerHTML = `<div class="card"><div class="tabs"><button class="${su ? 'ghost' : ''}" data-m="login">Log ind</button><button class="${su ? '' : 'ghost'}" data-m="signup">Opret konto</button></div>
+  <form id="af" style="display:grid;gap:10px">
+    ${su ? `<label>Navn<input name="name" required minlength="2" autocomplete="name"></label><label>Telefon<input name="phone" required inputmode="tel" autocomplete="tel"></label>
+      <label>Type<select name="kind"><option value="private">Privat</option><option value="business">Virksomhed</option></select></label>
+      <div id="biz" hidden style="display:none;gap:10px"><label>Firmanavn<input name="company"></label><label>CVR<input name="cvr" inputmode="numeric"></label><label>Faktureringsadresse<input name="billing"></label></div>` : ''}
+    <label>E-mail<input name="email" type="email" required autocomplete="email"></label>
+    <label>Adgangskode<input name="pw" type="password" required minlength="8" autocomplete="${su ? 'new-password' : 'current-password'}"></label>
+    ${su ? `<label style="display:flex;gap:8px;align-items:flex-start;color:var(--text)"><input type="checkbox" name="terms" required style="width:auto;margin-top:4px"><span>Jeg accepterer <a style="color:#9db6ff" target="_blank" href="vilkaar.html">vilkårene</a> og <a style="color:#9db6ff" target="_blank" href="privatliv.html">privatlivspolitikken</a>.</span></label>` : ''}
+    <button>${su ? 'Opret konto' : 'Log ind'}</button><div class="err" id="ae">${esc(msg)}</div></form></div>`;
+  $$('[data-m]').forEach((b) => b.onclick = () => authView(b.dataset.m));
+  const kind = $('[name=kind]'); if (kind) kind.onchange = () => { const b = $('#biz'); b.hidden = kind.value !== 'business'; b.style.display = kind.value === 'business' ? 'grid' : 'none'; };
+  $('#af').onsubmit = async (ev) => {
+    ev.preventDefault(); const f = ev.target; const btn = f.querySelector('button:not([data-m])'); btn.disabled = true; $('#ae').textContent = '';
+    if (su) {
+      const k = f.kind.value;
+      const { data, error } = await sb.auth.signUp({ email: f.email.value.trim(), password: f.pw.value, options: { data: { full_name: f.name.value.trim(), phone: f.phone.value.trim(), kind: k, company: k === 'business' ? f.company.value.trim() : null, cvr: k === 'business' ? f.cvr.value.trim() : null, billing_address: (f.billing?.value || '').trim() || null, terms_accepted: 'true', terms_version: TERMS_VERSION } } });
+      btn.disabled = false;
+      if (error) return ($('#ae').textContent = /registered|already/i.test(error.message) ? 'Der findes allerede en konto med den e-mail.' : /password/i.test(error.message) ? 'Adgangskoden er for svag. Brug mindst 8 tegn.' : 'Kunne ikke oprette konto. Tjek oplysningerne.');
+      if (!data.session) return authView('login', 'Tjek din e-mail og bekræft kontoen. Log derefter ind.');
+    } else {
+      const { error } = await sb.auth.signInWithPassword({ email: f.email.value.trim(), password: f.pw.value });
+      btn.disabled = false; if (error) return ($('#ae').textContent = 'Forkert e-mail eller adgangskode.');
+    }
+    boot();
+  };
+}
+
+// ───────────── Forside: bestillinger ─────────────
+async function home(note = '') {
+  $('#nav-out').hidden = false;
+  app.innerHTML = '<p class="muted">Henter…</p>';
+  const { data } = await sb.from('orders').select('*').order('created_at', { ascending: false }).limit(50);
+  app.innerHTML = `${note ? `<div class="card"><b>${esc(note)}</b></div>` : ''}<button id="new">+ Ny bestilling</button>` +
+    ((data || []).map((o) => { const [t, c] = statusOf(o); return `<div class="card" data-o="${o.id}" style="cursor:pointer"><div class="row"><b>${esc(o.ref)}</b><span class="pill ${c}">${esc(t)}</span></div><div class="muted">${esc(city(o.from_address))}${o.to_address ? ' → ' + esc(city(o.to_address)) : ' · timebooking'} · ${esc(dt(o.pickup_at))}</div></div>`; }).join('') || '<div class="card muted">Du har ingen bestillinger endnu.</div>');
+  $('#new').onclick = newOrder; $$('[data-o]').forEach((c) => c.onclick = () => orderView(c.dataset.o));
+}
+
+// ───────────── Ny bestilling ─────────────
+async function newOrder(prefill) {
+  quote = null;
+  const { data: vt } = await sb.from('vehicle_types').select('kind,name,bookable,pallets').order('sort');
+  const now = new Date(Date.now() + 3 * 3600e3); now.setMinutes(0, 0, 0);
+  const iso = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  app.innerHTML = `<div class="card"><h2>Ny bestilling</h2><form id="nf" style="display:grid;gap:10px">
+    <label>Type<select name="service"><option value="route">Transport fra A til B</option><option value="hourly">Timebooking</option></select></label>
+    <label>Køretøj<select name="vehicle">${(vt || []).filter((v) => v.bookable).map((v) => `<option value="${v.kind}">${esc(v.name)}</option>`).join('')}</select></label>
+    <label>Afhentningsadresse (vej, nummer, postnummer, by)<input name="from" required minlength="5"></label>
+    <label id="lto">Leveringsadresse<input name="to" minlength="5"></label>
+    <label id="lh" hidden>Antal timer<input name="hours" type="number" min="1" max="12" value="2"></label>
+    <label>Afhentningstidspunkt<input name="pickup" type="datetime-local" required value="${iso}" min="${iso}"></label>
+    <div class="row"><label style="flex:1">Paller<input name="pallets" type="number" min="0" max="12" value="1"></label><label style="flex:1">Vægt (kg)<input name="weight" type="number" min="1" value="100"></label></div>
+    <label>Hvad skal transporteres?<textarea name="goods" required minlength="3" rows="2"></textarea></label>
+    <button>Se pris</button><div class="err" id="ne"></div><div id="qo"></div></form></div><button class="ghost" id="back">Tilbage</button>`;
+  const f = $('#nf'); const sync = () => { const h = f.service.value === 'hourly'; $('#lto').hidden = h; $('#lh').hidden = !h; f.to.required = !h; }; f.service.onchange = sync; sync();
+  $('#back').onclick = () => home();
+  f.onsubmit = async (ev) => {
+    ev.preventDefault(); const btn = f.querySelector('button'); $('#ne').textContent = ''; $('#qo').innerHTML = ''; btn.disabled = true;
+    const hourly = f.service.value === 'hourly';
+    const body = { service: f.service.value, vehicle: f.vehicle.value, from: f.from.value.trim(), to: hourly ? '' : f.to.value.trim(), stops: [], hours: hourly ? parseInt(f.hours.value, 10) : null, extra_man_hours: 0, pallets: parseInt(f.pallets.value, 10), weight_kg: parseInt(f.weight.value, 10), goods: f.goods.value.trim(), pickup_at: new Date(f.pickup.value).toISOString() };
+    pending = body;
+    const { data, error } = await sb.functions.invoke('quote', { body });
+    btn.disabled = false;
+    if (error) { const e = await fnErr(error); if (e.code === 'QUOTE_ONLY') return ($('#qo').innerHTML = `<div class="notice">${esc(e.message)}</div><a style="color:#9db6ff" href="mailto:kontakt@roadforce.dk?subject=${encodeURIComponent('Forespørgsel på transport')}&body=${encodeURIComponent(`Afhentning: ${body.from}\nLevering: ${body.to}\nTidspunkt: ${f.pickup.value}\nGods: ${body.goods}\nPaller: ${body.pallets}, vægt: ${body.weight_kg} kg`)}">Send forespørgsel på mail</a>`); return ($('#ne').textContent = e.message); }
+    quote = data; summary();
+  };
+}
+
+function summary() {
+  const q = quote, biz = q.kind === 'business', p = q.price;
+  const rows = biz ? p.lines.map((l) => `<div class="line"><span>${esc(l.label)}${l.pending ? ' <span class="pill wait">afventer</span>' : ''}</span><span>${kr(l.amount)}</span></div>`).join('') + `<div class="line muted"><span>I alt ekskl. moms</span><span>${kr(p.exVat)}</span></div><div class="line muted"><span>Moms ${p.vatPercent} %</span><span>${kr(p.vat)}</span></div>`
+    : p.lines.map((l) => `<div class="line muted"><span>${esc(l.label)}</span><span>${kr(Math.round(l.amount * (100 + p.vatPercent) / 100))}</span></div>`).join('') + `<div class="line muted"><span>Heraf moms ${p.vatPercent} %</span><span>${kr(p.vat)}</span></div>`;
+  app.innerHTML = `<div class="card"><h2>Tjek din bestilling</h2>
+    <div class="muted">Afhentning</div><div>${esc(q.from.address)}</div>${q.to ? `<div class="muted">Levering</div><div>${esc(q.to.address)}</div>` : ''}
+    <div class="muted">${esc(dt(pending.pickup_at))}${q.distance_km ? ' · ' + q.distance_km + ' km' : ''}</div></div>
+    <div class="card">${rows}<div class="line"><b style="font-size:20px">I alt</b><b style="font-size:20px">${kr(p.total)}</b></div></div>
+    ${(p.notes || []).map((n) => `<div class="muted">• ${esc(n)}</div>`).join('')}
+    <div class="muted">Efter betaling gennemgår Road Force din bestilling. Godkender vi den ikke, refunderes hele beløbet automatisk. Du kan se status under dine bestillinger. Afbestilling er gratis, indtil chaufføren er kørt mod afhentningsstedet. Der er ikke fortrydelsesret på bestillinger med fast afhentningstid.</div>
+    <div class="err" id="pe"></div><div id="payw"></div>
+    <button id="pay">Betal ${kr(p.total)}</button><button class="ghost" id="edit">Ret oplysninger</button>`;
+  $('#edit').onclick = () => newOrder(); $('#pay').onclick = startPay;
+}
+
+async function startPay() {
+  const btn = $('#pay'); btn.disabled = true; $('#pe').textContent = '';
+  const { data, error } = await sb.functions.invoke('create-order', { body: { ...pending, expected_total: quote.price.total } });
+  if (error) { const e = await fnErr(error); btn.disabled = false; if (e.code === 'PRICE_CHANGED' && e.quote) { quote = e.quote; summary(); $('#pe').textContent = 'Prisen er ændret. Tjek den nye pris og betal igen.'; return; } return ($('#pe').textContent = e.message); }
+  if (!window.RF_STRIPE_PK) { $('#pe').textContent = 'Betaling er ikke sat op.'; return; }
+  stripe = stripe || window.Stripe(window.RF_STRIPE_PK);
+  elements = stripe.elements({ clientSecret: data.client_secret, appearance: { theme: 'stripe' } });
+  $('#payw').innerHTML = '<div id="pay-el"></div>'; elements.create('payment').mount('#pay-el');
+  btn.textContent = 'Bekræft betaling'; btn.disabled = false;
+  btn.onclick = async () => {
+    btn.disabled = true; $('#pe').textContent = '';
+    const r = await stripe.confirmPayment({ elements, confirmParams: { return_url: location.origin + location.pathname + '#order=' + data.order_id }, redirect: 'if_required' });
+    if (r.error) { btn.disabled = false; return ($('#pe').textContent = r.error.message || 'Betalingen fejlede.'); }
+    orderView(data.order_id, true);
+  };
+}
+
+// ───────────── Ordre ─────────────
+async function orderView(id, justPaid) {
+  app.innerHTML = '<p class="muted">Henter…</p>';
+  const [{ data: o }, { data: ex }, { data: ev }] = await Promise.all([sb.from('orders').select('*').eq('id', id).single(), sb.from('order_extras').select('*').eq('order_id', id).order('created_at'), sb.from('order_events').select('status,at').eq('order_id', id).order('at')]);
+  if (!o) return home();
+  const [t, c] = statusOf(o); const biz = o.customer_kind === 'business';
+  const show = (e) => { const v = e.vat_applies ? Math.round(e.amount_ex_vat * (o.vat_percent || 25) / 100) : 0; return biz ? kr(e.amount_ex_vat) + ' ekskl. moms' : kr(e.amount_ex_vat + v) + ' inkl. moms'; };
+  const track = o.track_token ? `${location.origin}${location.pathname.replace(/[^/]*$/, '')}track.html?t=${encodeURIComponent(o.track_token)}` : '';
+  app.innerHTML = `<button class="ghost" id="back">← Mine bestillinger</button>
+    ${justPaid ? `<div class="card"><b>Tak – betalingen er gennemført.</b><div class="muted">Din bestilling afventer godkendelse hos Road Force. Du får besked, når den er bekræftet. Afvises den, refunderes hele beløbet.</div></div>` : ''}
+    <div class="card"><div class="row"><h2>${esc(o.ref)}</h2><span class="pill ${c}">${esc(t)}</span></div>
+      <div>${esc(o.from_address)}</div>${o.to_address ? `<div class="muted">↓</div><div>${esc(o.to_address)}</div>` : '<div class="muted">Timebooking</div>'}
+      <div class="muted">${esc(dt(o.pickup_at))} · I alt ${kr(o.price_total)}</div>
+      ${o.status === 'new' && !o.approved_at ? '<div class="notice">Road Force gennemgår din bestilling, før vi tildeler en chauffør. Afviser vi den, refunderes hele beløbet automatisk.</div>' : ''}
+      ${track && !['cancelled', 'awaiting_payment'].includes(o.status) ? `<a style="color:#9db6ff" href="${esc(track)}" target="_blank">Åbn sporingsside</a>` : ''}</div>
+    ${(ev || []).length ? `<div class="card"><h3>Forløb</h3>${ev.map((e) => `<div class="line muted"><span>${esc((STATUS[e.status] || [e.status])[0])}</span><span>${esc(dt(e.at))}</span></div>`).join('')}</div>` : ''}
+    ${(ex || []).filter((e) => e.status !== 'proposed' && e.status !== 'rejected').length ? `<div class="card"><h3>Tillæg til din godkendelse</h3><div class="muted">Tillæg faktureres først, når du har godkendt dem.</div>${ex.filter((e) => e.status !== 'proposed' && e.status !== 'rejected').map((e) => `<div class="card" style="background:var(--card2)"><div class="line"><span>${esc(KIND[e.kind] || e.kind)}: ${esc(e.description)}</span><b>${show(e)}</b></div>${e.status === 'awaiting_customer' ? `<div class="row"><button class="ok" data-x="${e.id}" data-a="1" style="flex:1">Godkend</button><button class="bad" data-x="${e.id}" data-a="0" style="flex:1">Afvis</button></div>` : `<span class="pill ${e.status === 'customer_accepted' ? 'good' : 'low'}">${e.status === 'customer_accepted' ? 'Godkendt af dig' : 'Afvist af dig'}</span>`}</div>`).join('')}</div>` : ''}`;
+  $('#back').onclick = () => home();
+  $$('[data-x]').forEach((b) => b.onclick = async () => { b.disabled = true; const { error } = await sb.rpc('customer_respond_extra', { p_id: parseInt(b.dataset.x, 10), p_accept: b.dataset.a === '1' }); if (error) alert(error.message); orderView(id); });
+}
+
+// ───────────── Start ─────────────
+async function boot() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) return authView();
+  const { data: p } = await sb.from('profiles').select('id,role,active').eq('id', session.user.id).single();
+  if (!p || p.role !== 'customer' || !p.active) { await sb.auth.signOut(); return authView('login', 'Denne side er til kunder. Chauffører bruger chaufførsiden.'); }
+  me = p; const m = location.hash.match(/order=([0-9a-f-]{36})/);
+  if (m) { history.replaceState(null, '', location.pathname); return orderView(m[1], true); }
+  home();
+}
+$('#nav-out').onclick = async () => { await sb.auth.signOut(); authView(); };
+boot();
+})();
+</script>
+</body>
+</html>
