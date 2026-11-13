@@ -35,7 +35,7 @@ button.ghost{background:transparent;border:1px solid var(--line);color:var(--tex
 <script>
 (() => {
 const CFG = window.RF_CONFIG, TERMS_VERSION = '2026-11-c';
-const sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+const sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'rf-web-customer' } });
 const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const app = $('#app');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -178,7 +178,7 @@ async function boot() {
   const { data: { session } } = await sb.auth.getSession();
   if (!session) return authView();
   const { data: p } = await sb.from('profiles').select('id,role,active').eq('id', session.user.id).single();
-  if (!p || p.role !== 'customer' || !p.active) { await sb.auth.signOut(); return authView('login', 'Denne side er til kunder. Chauffører bruger chaufførsiden.'); }
+  if (!p || p.role !== 'customer' || !p.active) { await sb.auth.signOut({ scope: 'local' }); return authView('login', 'Denne side er til kunder. Chauffører bruger chaufførsiden.'); }
   me = p; const m = location.hash.match(/order=([0-9a-f-]{36})/);
   if (m) { history.replaceState(null, '', location.pathname); return orderView(m[1], true); }
   home();

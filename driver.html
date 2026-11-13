@@ -30,7 +30,7 @@ button.ghost,a.ghost{background:transparent;border:1px solid var(--line);color:v
 <script>
 (() => {
 const CFG = window.RF_CONFIG;
-const sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+const sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'rf-web-driver' } });
 const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const app = $('#app');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -122,7 +122,7 @@ async function trip(id) {
 async function boot() {
   const { data: { session } } = await sb.auth.getSession(); if (!session) return login();
   const { data: p } = await sb.from('profiles').select('id,role,full_name,active,subcontractor_id').eq('id', session.user.id).single();
-  if (!p || p.role !== 'driver' || !p.active) { await sb.auth.signOut(); return login('Denne side er til chauffører.'); }
+  if (!p || p.role !== 'driver' || !p.active) { await sb.auth.signOut({ scope: 'local' }); return login('Denne side er til chauffører.'); }
   me = p; trips();
 }
 $('#out').onclick = async () => { await stopShare().catch(() => {}); await sb.auth.signOut(); login(); };
