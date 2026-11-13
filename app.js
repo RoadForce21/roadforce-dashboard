@@ -190,9 +190,18 @@
         <small>${esc(vehLabel(o))} · ${esc(pal(o.pallets))} · ${esc(o.weight_kg)} kg · ${kr(o.price_ex_vat)} ekskl. moms</small>
         ${o.approved_at ? `<div class="suggest" data-suggest="${esc(o.id)}"><small class="muted">Finder nærmeste chauffør…</small></div>
         <select data-assign="${esc(o.id)}">${driverOptions('')}</select>` : `<small class="muted">Skal godkendes, før en chauffør kan tildeles.</small>
-        <button class="btn" type="button" data-approve="${esc(o.id)}">Godkend tur</button>`}
+        <button class="btn" type="button" data-approve="${esc(o.id)}">Godkend tur</button>
+        <button class="btn danger" type="button" data-reject="${esc(o.id)}">Afvis og refundér</button>`}
       </div>`).join('') : '<p class="muted">Ingen nye betalte ordrer.</p>';
     fresh.filter((o) => o.approved_at).forEach((o) => loadSuggestion(o.id));
+    $$('#panel-new [data-reject]').forEach((b) => b.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!confirm('Afvis turen? Kunden får hele beløbet refunderet på kortet, og turen annulleres.')) return;
+      b.disabled = true;
+      const { error } = await S.sb.functions.invoke('admin-cancel-order', { body: { order_id: b.dataset.reject, fee_mode: 'none', dispatched: false } });
+      if (error) { alert(await fnError(error)); b.disabled = false; return; }
+      await loadOrders(); renderAll();
+    }));
     $$('#panel-new [data-approve]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); b.disabled = true; approve(b.dataset.approve); }));
     const act = S.orders.filter((o) => ACTIVE.includes(o.status));
     $('#panel-active').innerHTML = act.length ? act.map((o) => `
@@ -450,7 +459,7 @@
         <label class="chip" style="margin-bottom:8px"><input type="checkbox" name="vat" checked> Tillæg moms</label><button class="btn small" type="submit">Tilføj tillæg</button></form>`}` : ''}
       ${inv ? `<h3 style="margin-top:16px">Faktura</h3><p>${esc(inv.number)} · ${kr(inv.total)} · ${inv.due > 0 ? `<b>restbeløb ${kr(inv.due)}</b>` : 'intet restbeløb'}</p><button id="d-invoice-view" class="btn small">Vis / print faktura</button>`
         : (o.status === 'delivered' || (o.status === 'cancelled' && o.cancel_fee_ex_vat > 0)) ? '<h3 style="margin-top:16px">Faktura</h3><button id="d-invoice" class="btn primary small">Udsted faktura</button>' : ''}
-      ${canApprove ? `<p class="muted">Turen er ikke godkendt. Ingen chauffør kan tildeles før den er godkendt.</p><button class="btn" id="d-approve">Godkend tur</button>` : ''}
+      ${canApprove ? `<p class="muted">Turen er ikke godkendt. Ingen chauffør kan tildeles før den er godkendt. Vil I ikke tage turen, så brug Annullér nedenfor: hele beløbet refunderes til kunden.</p><button class="btn" id="d-approve">Godkend tur</button>` : ''}
       ${canAssign ? `<label>${o.driver_id ? 'Skift chauffør' : 'Tildel chauffør'}<select id="d-assign">${driverOptions(o.driver_id)}</select></label>` : ''}
       ${pod}
       <h3 style="margin-top:16px">Historik</h3>

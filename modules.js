@@ -274,6 +274,28 @@
       r = await sb().from('support_tickets').update({ status: f.s.value || 'in_progress', updated_at: new Date().toISOString() }).eq('id', id); if (r.error) alert(err(r.error)); renderSupport(); });
   }
 
-  window.addEventListener('rf-showview', (e) => { const v = e.detail; if (v === 'regnskab') { R.rows = null; renderRegnskab(); } if (v === 'subs') renderSubs(); if (v === 'quality') renderQuality(); if (v === 'support') renderSupport(); });
-  window.RFModules = { renderRegnskab, renderSubs, renderQuality, renderSupport, R, U };
+
+  // ═════════════ Afgifter (bro, færge, vejafgifter) ═════════════
+  async function renderTolls() {
+    const root = $('#toll-body');
+    const { data, error } = await sb().from('toll_rates').select('*').order('id');
+    if (error) { root.innerHTML = `<p class="error">${esc(error.message)}</p>`; return; }
+    const kr0 = (o) => (o == null ? '' : String(o / 100).replace('.', ','));
+    const toOre = (v) => { v = String(v || '').trim().replace(',', '.'); if (v === '') return null; const n = parseFloat(v); return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : NaN; };
+    root.innerHTML = `<p class="notice">Priser her er ekskl. moms og vises som særskilte linjer i tilbuddet før booking og betaling. Markér "Afventer pris", hvis prisen kræver et konkret tilbud – linjen vises da med 0 kr og opkræves først efter kundens godkendelse. Kontrollér altid mod udbyderens aktuelle takst.</p>` +
+      data.map((r) => `<div class="card" data-toll="${r.id}"><div class="row"><b>${esc(r.name)}</b><small class="muted">Kilde: ${esc(r.source || '–')} · kontrolleret ${esc(r.checked_at || '–')}</small></div>
+        <p class="muted">${esc(r.reason)}</p>
+        <div class="row"><label>Lille varebil (kr)<input name="van" value="${kr0(r.van_ore)}" inputmode="decimal"></label><label>Stor varebil (kr)<input name="vl" value="${kr0(r.van_large_ore)}" inputmode="decimal"></label><label>Lift/lastbil (kr)<input name="lift" value="${kr0(r.lift_ore)}" inputmode="decimal"></label></div>
+        <div class="row"><label><input type="checkbox" name="pending" ${r.pending ? 'checked' : ''}> Afventer pris (kræver tilbud)</label><label><input type="checkbox" name="active" ${r.active ? 'checked' : ''}> Aktiv</label><button class="btn small primary" data-save="${r.id}">Gem</button></div></div>`).join('') || '<p class="muted">Ingen afgifter.</p>';
+    $$('[data-save]', root).forEach((b) => b.onclick = async () => {
+      const c = b.closest('[data-toll]'); const q = (n) => c.querySelector(`[name=${n}]`);
+      const van = toOre(q('van').value), vl = toOre(q('vl').value), li = toOre(q('lift').value);
+      if ([van, vl, li].some((x) => Number.isNaN(x))) return alert('Ugyldigt beløb.');
+      const { error: e2 } = await sb().rpc('admin_save_toll', { p_id: parseInt(b.dataset.save, 10), p_van: van, p_van_large: vl, p_lift: li, p_pending: q('pending').checked, p_active: q('active').checked });
+      if (e2) return alert(err(e2)); renderTolls();
+    });
+  }
+
+  window.addEventListener('rf-showview', (e) => { const v = e.detail; if (v === 'regnskab') { R.rows = null; renderRegnskab(); } if (v === 'subs') renderSubs(); if (v === 'tolls') renderTolls(); if (v === 'quality') renderQuality(); if (v === 'support') renderSupport(); });
+  window.RFModules = { renderTolls, renderRegnskab, renderSubs, renderQuality, renderSupport, R, U };
 })();
