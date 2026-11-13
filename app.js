@@ -10,8 +10,8 @@
   const ago = (iso) => { const m = Math.round((Date.now() - new Date(iso)) / 60000); return m < 1 ? 'lige nu' : m < 60 ? `${m} min siden` : `${Math.round(m / 60)} t siden`; };
   const pal = (n) => `${n} ${Number(n) === 1 ? 'palle' : 'paller'}`;
   const VEH_NAME = { van: 'Mercedes-Benz Vito – kassebil', van_large: 'Mercedes-Benz Sprinter L2H2 – stor kassebil', lift: 'Mercedes-Benz Sprinter – liftbil', lorry18: 'Mercedes-Benz – lastbil (18 pallepladser)', lorry24: 'Mercedes-Benz – lastbil (24 pallepladser)' };
-  const vehLabel = (o) => `${VEH_NAME[o.vehicle] || o.vehicle}${o.service === 'hourly' ? ` · timebooking ${o.hours} t` : ''}${Number(o.extra_man_hours) ? ` · +mand ${o.extra_man_hours} t` : ''}`;
-  const distLabel = (o) => o.service === 'hourly' ? 'timebooking' : `${o.distance_km} km`;
+  const vehLabel = (o) => `${VEH_NAME[o.vehicle] || o.vehicle}${o.service === 'hourly' ? ` · timebooking (historisk) ${o.hours} t` : ''}${Number(o.extra_man_hours) ? ` · +mand ${o.extra_man_hours} t` : ''}`;
+  const distLabel = (o) => o.service === 'hourly' ? 'timebooking (historisk)' : `${o.distance_km} km`;
   const city = (a) => String(a || '').split(',').slice(-2, -1)[0]?.trim().replace(/^\d{4}\s*/, '') || a;
 
   const STATUS = { awaiting_payment: 'Afventer betaling', new: 'Ny – skal godkendes og tildeles', assigned: 'Tildelt', loaded: 'Afhentet', in_transit: 'Undervejs', delivered: 'Leveret', cancelled: 'Annulleret' };
@@ -24,8 +24,7 @@
     ['Kassebil – A–B', [['van_min_ore', 'Minimumspris pr. tur', 'kr', true], ['van_km_ore', 'Pris pr. km', 'kr', true], ['van_stop_ore', 'Ekstra stop', 'kr', true]]],
     ['Sprinter L2H2 – A–B (foreslåede satser 12/11; fast pris først når kapacitet er udfyldt)', [['van_large_min_ore', 'Minimumspris pr. tur', 'kr', true], ['van_large_km_ore', 'Pris pr. km', 'kr', true], ['van_large_stop_ore', 'Ekstra stop', 'kr', true], ['van_large_hour_ore', 'Timepris', 'kr', true], ['van_large_extra_km_ore', 'Ekstra km (timebooking)', 'kr', true], ['van_large_max_pallets', 'Dokumenteret maks. pallepladser (tom = kun tilbud)', 'stk', false], ['van_large_max_weight_kg', 'Dokumenteret maks. vægt (tom = kun tilbud)', 'kg', false]]],
     ['Mindre liftbil – A–B', [['lift_min_ore', 'Minimumspris pr. tur', 'kr', true], ['lift_km_ore', 'Pris pr. km', 'kr', true], ['lift_stop_ore', 'Ekstra stop', 'kr', true]]],
-    ['Ventetid ved afhentning/levering (A–B). Timebooking har ingen særskilt ventetid', [['wait_free_min', 'Gratis ventetid pr. stop', 'min', false], ['wait_per_min_ore', 'Pris pr. påbegyndt minut derefter (ens for alle biltyper)', 'kr', true]]],
-    ['Timebooking', [['van_hour_ore', 'Kassebil – timepris', 'kr', true], ['lift_hour_ore', 'Liftbil – timepris', 'kr', true], ['hourly_min_hours', 'Minimumsbooking', 'timer', false], ['km_per_hour', 'Inkluderede km pr. time', 'km', false], ['van_extra_km_ore', 'Kassebil – ekstra km', 'kr', true], ['lift_extra_km_ore', 'Liftbil – ekstra km', 'kr', true]]],
+    ['Ventetid ved afhentning/levering', [['wait_free_min', 'Gratis ventetid pr. stop', 'min', false], ['wait_per_min_ore', 'Pris pr. påbegyndt minut derefter (ens for alle biltyper)', 'kr', true]]],
     ['Tillæg', [['acute_percent', 'Akut', '%', false], ['acute_min_ore', 'Akut – mindstebeløb', 'kr', true], ['evening_percent', 'Hverdage 17–22', '%', false], ['night_percent', 'Nat 22–07', '%', false], ['weekend_percent', 'Weekend og helligdage', '%', false]]],
     ['Ekstra mand', [['extra_man_day_ore', 'Hverdage 07–17 (pr. time)', 'kr', true], ['extra_man_evening_ore', 'Hverdage 17–22 (pr. time)', 'kr', true], ['extra_man_night_ore', 'Nat, weekend, helligdage (pr. time)', 'kr', true], ['extra_man_min_hours', 'Minimumsbooking', 'timer', false]]],
     ['Grænser og moms', [['max_route_km', 'A–B maks. (derover: tilbud)', 'km', false], ['max_stops', 'Maks. ekstra stop', 'stk', false], ['max_weight_kg', 'Maks. vægt', 'kg', false], ['max_pallets', 'Maks. pallepladser', 'stk', false], ['vat_percent', 'Moms', '%', false]]],
@@ -418,7 +417,6 @@
       ex('Kassebil 30 km', { vehicle: 'van', km: 30, pickupAt: wed }),
       ex('Liftbil 50 km, 1 ekstra stop', { vehicle: 'lift', km: 50, stops: 1, pickupAt: wed }),
       ex('Kassebil 50 km, lørdag', { vehicle: 'van', km: 50, pickupAt: sat }),
-      ex('Liftbil 4 timer + ekstra mand 2 t', { service: 'hourly', vehicle: 'lift', hours: 4, extraManHours: 2, pickupAt: wed }),
       ex('Kassebil 120 km', { vehicle: 'van', km: 120, pickupAt: wed }),
     ].join('<br>');
   }

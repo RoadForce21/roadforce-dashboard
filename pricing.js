@@ -91,7 +91,7 @@ const isQuarterHours = (h) => Number.isFinite(h) && Math.abs(h * 4 - Math.round(
  */
 export function computePrice(p, i) {
   const service = i.service ?? 'route';
-  if (service !== 'route' && service !== 'hourly') throw new QuoteError('Ukendt ydelse');
+  if (service !== 'route') throw new QuoteError(service === 'hourly' ? 'Timebooking er ikke længere tilgængelig. Vælg fast pris efter afstand.' : 'Ukendt ydelse');
   if (['lorry18', 'lorry24'].includes(i.vehicle)) throw new QuoteError('Lastbiler prissættes ved forespørgsel. Send en forespørgsel, så får du et tilbud uden betaling.', 'QUOTE_ONLY');
   if (!['van', 'van_large', 'lift'].includes(i.vehicle)) throw new QuoteError('Vælg et køretøj.');
   if (i.vehicle === 'van_large' && (p.van_large_max_pallets == null || p.van_large_max_weight_kg == null)) throw new QuoteError('Kapaciteten for denne bil er ikke dokumenteret endnu. Send en forespørgsel, så får du et tilbud uden betaling.', 'QUOTE_ONLY');
@@ -122,12 +122,6 @@ export function computePrice(p, i) {
     lines.push({ key: 'transport', label: kmPrice < min ? `Transport ${km} km (minimumspris)` : `Transport ${km} km`, amount: base });
     if (stops) lines.push({ key: 'stops', label: `${stops} ekstra stop`, amount: stops * p[`${v}_stop_ore`] });
     notes.push('Ventetid: de første ' + (p.wait_free_min ?? WAIT_DEFAULT.free_min) + ' min. pr. stop er gratis, derefter ' + ((p.wait_per_min_ore ?? WAIT_DEFAULT.per_min_ore) / 100) + ' kr. ekskl. moms pr. påbegyndt minut.');
-  } else {
-    const h = i.hours;
-    if (!isQuarterHours(h) || h < p.hourly_min_hours) throw new QuoteError(`Timebooking er mindst ${p.hourly_min_hours} timer (derefter pr. påbegyndt kvarter).`);
-    base = eur(h * p[`${v}_hour_ore`]);
-    lines.push({ key: 'hours', label: `${h} timer`, amount: base });
-    notes.push(`${p.km_per_hour} km pr. faktureret time er inkluderet (${h * p.km_per_hour} km). Ekstra km: ${p[`${v}_extra_km_ore`] / 100} kr./km afregnes bagefter.`);
   }
 
   // Tillæg på grundprisen (aldrig på stop, ventetid, ekstra mand eller udlæg). Højeste af tidstillæg og akuttillæg – de lægges ikke sammen.
@@ -153,7 +147,7 @@ export function computePrice(p, i) {
 
 /** Afbestillingsgebyr (ekskl. moms) for enkeltbookinger. dispatched = bilen er afsendt / forgæves ankomst. */
 export function cancellationFee(p, o, now = new Date()) {
-  const min = o.service === 'hourly' ? p.hourly_min_hours * p[`${o.vehicle}_hour_ore`] : p[`${o.vehicle}_min_ore`];
+  const min = p[`${o.vehicle}_min_ore`];
   const hoursUntil = (new Date(o.pickupAt).getTime() - now.getTime()) / 3600000;
   let fee = 0;
   if (o.dispatched) fee = min;

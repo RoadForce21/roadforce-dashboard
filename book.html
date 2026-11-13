@@ -110,8 +110,7 @@ async function newOrder(prefill) {
   $('#back').onclick = () => home();
   f.onsubmit = async (ev) => {
     ev.preventDefault(); const btn = f.querySelector('button'); $('#ne').textContent = ''; $('#qo').innerHTML = ''; btn.disabled = true;
-    const hourly = false;
-    const body = { service: f.service.value, vehicle: f.vehicle.value, from: f.from.value.trim(), to: hourly ? '' : f.to.value.trim(), stops: [], hours: null, extra_man_hours: 0, pallets: parseInt(f.pallets.value, 10), weight_kg: parseInt(f.weight.value, 10), goods: f.goods.value.trim(), pickup_at: new Date(f.pickup.value).toISOString() };
+    const body = { service: f.service.value, vehicle: f.vehicle.value, from: f.from.value.trim(), to: f.to.value.trim(), stops: [], hours: null, extra_man_hours: 0, pallets: parseInt(f.pallets.value, 10), weight_kg: parseInt(f.weight.value, 10), goods: f.goods.value.trim(), pickup_at: new Date(f.pickup.value).toISOString() };
     pending = body;
     const { data, error } = await sb.functions.invoke('quote', { body });
     btn.disabled = false;
@@ -163,7 +162,7 @@ async function orderView(id, justPaid) {
   app.innerHTML = `<button class="ghost" id="back">← Mine bestillinger</button>
     ${justPaid ? `<div class="card"><b>Tak – betalingen er gennemført.</b><div class="muted">Din bestilling afventer godkendelse hos Road Force. Du får besked, når den er bekræftet. Afvises den, refunderes hele beløbet.</div></div>` : ''}
     <div class="card"><div class="row"><h2>${esc(o.ref)}</h2><span class="pill ${c}">${esc(t)}</span></div>
-      <div>${esc(o.from_address)}</div>${o.to_address ? `<div class="muted">↓</div><div>${esc(o.to_address)}</div>` : '<div class="muted">Timebooking</div>'}
+      <div>${esc(o.from_address)}</div>${o.to_address ? `<div class="muted">↓</div><div>${esc(o.to_address)}</div>` : ''}
       <div class="muted">${esc(dt(o.pickup_at))} · I alt ${kr(o.price_total)}</div>
       ${o.status === 'new' && !o.approved_at ? '<div class="notice">Road Force gennemgår din bestilling, før vi tildeler en chauffør. Afviser vi den, refunderes hele beløbet automatisk.</div>' : ''}
       ${track && !['cancelled', 'awaiting_payment'].includes(o.status) ? `<a style="color:#9db6ff" href="${esc(track)}" target="_blank">Åbn sporingsside</a>` : ''}</div>

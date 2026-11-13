@@ -164,10 +164,12 @@
   [U.P.from, U.P.to] = range('month');
   async function renderSubs() {
     const root = $('#sub-body');
-    const [{ data: subs, error }, { data: drivers }] = await Promise.all([sb().from('subcontractors').select('*').order('name'), sb().from('profiles').select('id,full_name,subcontractor_id,active').eq('role', 'driver')]);
+    const [{ data: subs, error }, { data: drivers }] = await Promise.all([sb().from('subcontractors').select('*').order('name'), sb().from('profiles').select('id,full_name,subcontractor_id,active,settlement_recipient,personal_pay_percent').eq('role', 'driver')]);
     if (error) { root.innerHTML = `<p class="error">${esc(err(error))}</p>`; return; }
     U.subs = subs; U.drivers = drivers || [];
     const { data: fin } = await sb().rpc('admin_trip_finance', { p_include_test: U.test }); U.rows = (fin || []).filter((r) => r.executed_by === 'subcontractor');
+    const { data: pe } = await sb().rpc('admin_partner_earnings', { p_from: U.P.from, p_to: U.P.to });
+    const peRows = ((pe && pe.subcontractors) || []).flatMap((s) => { const t = s.totals || {}; return [`<tr><td><b>${esc(s.name)}</b></td><td>Samlet for firmaet</td><td>${t.trips_done || 0}</td><td class="r">${kr(t.earned ?? 0)}</td><td class="r">${kr(t.expected ?? 0)}</td><td class="r">${kr(t.pending ?? 0)}</td><td class="r">${kr(t.paid ?? 0)}</td><td class="r">${kr(t.rf_earned ?? 0)}</td></tr>`].concat((s.drivers || []).map((d) => `<tr><td></td><td>${esc(d.driver_name || '–')} <small>${d.settlement_recipient ? 'afregningsmodtager' : d.personal_pay_percent == null ? 'ingen personlig aftale' : d.personal_pay_percent + ' % personlig'}</small></td><td>${d.trips_done}</td><td class="r">${kr(d.company_share)}<small>firmaets andel</small></td><td colspan="3" class="r">${d.personal_amount == null ? '<span class="muted">Aftale mangler – intet vises for chaufføren</span>' : 'Personlig: ' + kr(d.personal_amount)}</td><td></td></tr>`)); });
     const rows = U.rows.filter((r) => { const d = dateOf(r); return d >= U.P.from && d <= U.P.to && (!U.sel || r.subcontractor_id === U.sel); });
     const body = rows.map((r) => `<tr><td>${r.settlement_status === 'draft' ? `<input type="checkbox" data-ap="${r.settlement_id}">` : ''}</td><td><b>${esc(r.ref)}</b>${r.is_test ? ' <span class="tag">TEST</span>' : ''}</td><td>${dk(r.pickup_at || r.created_at)}</td><td>${esc(r.subcontractor_name)}</td><td>${esc(r.driver_name || '–')}</td>
       <td class="r">${kr(r.basis_ex_vat)}</td><td class="r">${kr(r.sub_share)}<small>${r.sub_percent} %</small></td><td class="r">${kr(r.rf_share)}</td><td class="r">${kr(r.expenses_sub + r.expenses_rf)}<small>underlev. ${kr(r.expenses_sub)} · RF ${kr(r.expenses_rf)}</small></td>
@@ -180,7 +182,7 @@
         <div class="card"><h3>Firmaer</h3>${U.subs.map((s) => { const n = U.drivers.filter((d) => d.subcontractor_id === s.id).length; return `<div class="item click" data-edit="${s.id}"><b>${esc(s.name)}</b> <span class="tag">${SUBST[s.status]}</span> ${s.rates_confirmed ? '' : '<span class="tag warnt">Afregningssats: uafklaret</span>'}<small>CVR ${esc(s.cvr || '–')} ${s.cvr_verified ? '✔ kontrolleret' : '(ikke kontrolleret)'} · ${n} chauffør(er) · ${s.subcontractor_percent} % / ${100 - s.subcontractor_percent} %</small></div>`; }).join('') || '<p class="muted">Ingen underleverandører endnu.</p>'}
           <button class="btn primary small" id="sub-new">+ Ny underleverandør</button></div>
         <div class="card"><h3>Tilknyt chauffører</h3><p class="muted">En chauffør uden firma er egen chauffør (ingen 80/20). Ændringen gælder nye tildelinger – tidligere ture beholder deres gemte fordeling.</p>
-          ${U.drivers.map((d) => `<div class="item row"><span>${esc(d.full_name)}</span><select data-drv="${d.id}"><option value="">Egen chauffør</option>${U.subs.map((s) => `<option value="${s.id}" ${s.id === d.subcontractor_id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>`).join('')}</div>
+          ${U.drivers.map((d) => `<div class="item row"><span>${esc(d.full_name)}</span><select data-drv="${d.id}"><option value="">Egen chauffør</option>${U.subs.map((s) => `<option value="${s.id}" ${s.id === d.subcontractor_id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>${d.subcontractor_id ? `<div class="item row"><label class="chk"><input type="checkbox" data-rec="${d.id}" ${d.settlement_recipient ? 'checked' : ''}> Afregningsmodtager (ser firmaets tal)</label><label>Personlig % af firmaets andel<input type="number" min="0" max="100" data-pp="${d.id}" value="${d.personal_pay_percent ?? ''}" placeholder="tom = ingen aftale" style="width:130px"></label></div>` : ''}`).join('')}<p class="muted">Afregningsmodtager = chaufføren modtager selv firmaets andel (ejer). Ellers vises kun et personligt beløb, hvis der er aftalt en procent. Mangler aftalen, vises intet beløb for chaufføren.</p></div>
       </div>
       <div id="sub-edit"></div>
       <h3 class="sec">Indtjening og afregning pr. firma</h3>
@@ -189,6 +191,8 @@
         <label class="chk"><input type="checkbox" id="u-test" ${U.test ? 'checked' : ''}> Vis testordrer</label>
         <button class="btn small" id="u-approve">Godkend markerede</button><button class="btn small" id="u-csv">⬇ Eksportér CSV</button></div>
       ${table(['Firma', 'Ture', 'Betaling fra kunde ekskl. moms', 'Underlev. andel', 'Road Force andel', 'Udlæg', 'Reguleringer', 'Afventer godkendelse', 'Godkendt', 'Betalt'], per)}
+      <h3 class="sec">Partnerindtjening – det chaufførerne ser i RF Partner</h3><p class="muted">Beregnes ud fra de gemte afregninger. Beløbene er ekskl. moms og uden udlæg. Road Forces andel ses kun her.</p>
+      ${table(['Firma', 'Chauffør', 'Ture', 'Optjent', 'Forventet', 'Afventer afregning', 'Udbetalt', 'Road Force andel'], peRows)}
       <h3 class="sec">Afregninger (${rows.length})</h3><p class="muted">Afregning er manuel: godkend, betal selv via banken og registrér dato og reference. Intet udbetales automatisk. Godkendte afregninger er låst – senere ændringer sker som regulering med begrundelse.</p>
       ${table(['', 'Tur', 'Dato', 'Firma', 'Chauffør', 'Grundlag ekskl. moms', 'Underlev. andel', 'Road Force andel', 'Udlæg (separat)', 'Reguleringer', 'Afregning', ''], body)}`;
     wirePeriod(root, U.P, renderSubs);
@@ -197,6 +201,8 @@
     $('#sub-new', root).onclick = () => editSub({});
     $$('[data-edit]', root).forEach((el) => el.onclick = () => editSub(U.subs.find((s) => s.id === el.dataset.edit)));
     $$('[data-drv]', root).forEach((el) => el.onchange = async () => { const { error: e } = await sb().rpc('admin_set_driver_company', { p_driver: el.dataset.drv, p_sub: el.value || null }); if (e) alert(err(e)); renderSubs(); });
+    const savePay = async (id) => { const rec = $(`[data-rec="${id}"]`, root).checked, pv = $(`[data-pp="${id}"]`, root).value.trim(); const { error: e } = await sb().rpc('admin_set_driver_pay', { p_driver: id, p_recipient: rec, p_percent: pv === '' ? null : parseInt(pv, 10) }); if (e) alert(err(e)); renderSubs(); };
+    $$('[data-rec]', root).forEach((el) => el.onchange = () => savePay(el.dataset.rec)); $$('[data-pp]', root).forEach((el) => el.onchange = () => savePay(el.dataset.pp));
     $$('[data-recalc]', root).forEach((b) => b.onclick = async () => { const { error: e } = await sb().rpc('admin_recalc_settlement', { p_order: b.dataset.recalc }); if (e) alert(err(e)); renderSubs(); });
     $$('[data-pay]', root).forEach((b) => b.onclick = async () => { const v = await ask('Registrér betaling til underleverandør', [{ k: 'd', label: 'Betalingsdato', type: 'date', value: new Date().toLocaleDateString('sv-SE') }, { k: 'r', label: 'Reference (bankoverførsel/bilag)' }], 'Marker betalt'); if (!v) return;
       const { error: e } = await sb().rpc('admin_mark_settlement_paid', { p_id: b.dataset.pay, p_paid_at: v.d, p_reference: v.r }); if (e) alert(err(e)); renderSubs(); });
