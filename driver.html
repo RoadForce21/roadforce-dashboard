@@ -17,6 +17,7 @@ input,select,textarea{width:100%;background:var(--card2);color:var(--text);borde
 button,a.btn{background:var(--blue);color:#fff;border:0;border-radius:12px;padding:13px 16px;font:inherit;font-weight:700;cursor:pointer;text-decoration:none;text-align:center;display:block}
 button.ghost,a.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}button.bad{background:var(--red)}button:disabled{opacity:.5}
 .pill{display:inline-block;border-radius:999px;padding:3px 12px;font-size:13px;font-weight:700;background:rgba(37,92,255,.16);color:#9db6ff}.pill.good{background:rgba(47,207,122,.16);color:#7fe3ad}.pill.low{background:rgba(255,93,93,.16);color:#ff9a9a}
+.pill.amber{background:rgba(245,184,61,.16);color:#f5b83d}.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}.tile{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:10px}.tile b{display:block;font-size:18px;margin-top:2px}.bars{display:flex;align-items:flex-end;gap:3px;height:110px}.bars i{flex:1;background:var(--blue);border-radius:3px;min-height:1px}.bars i.z{background:var(--line)}
 .err{color:var(--red)}.notice{border-left:3px solid var(--amber);padding-left:10px;color:var(--muted);font-size:14px}[hidden]{display:none!important}
 </style>
 </head>
@@ -64,9 +65,10 @@ function login(msg = '') {
 async function trips() {
   $('#out').hidden = false;
   const { data } = await sb.from('orders').select('*').eq('driver_id', me.id).in('status', ['assigned', 'loaded', 'in_transit']).order('pickup_at');
-  app.innerHTML = `<div class="card"><div class="row"><b>Del min position</b><button class="ghost" id="sh" style="padding:8px 14px">${sharing ? 'Slå fra' : 'Slå til'}</button></div><div class="muted">Positionen deles kun, mens denne side er åben på telefonen. Hold skærmen tændt under kørsel.</div></div>` +
-    ((data || []).map((o) => `<div class="card" data-o="${o.id}" style="cursor:pointer"><div class="row"><b>${esc(o.ref)}</b><span class="pill">${esc(ST[o.status])}</span></div><div>${esc(o.from_address)}</div>${o.to_address ? `<div class="muted">→ ${esc(o.to_address)}</div>` : '<div class="muted">Timebooking</div>'}<div class="muted">${esc(dt(o.pickup_at))}</div></div>`).join('') || '<div class="card muted">Ingen aktive ture lige nu. Siden opdateres, når kontoret tildeler dig en tur.</div>') +
+  app.innerHTML = nav('t') + `<div class="card"><div class="row"><b>Del min position</b><button class="ghost" id="sh" style="padding:8px 14px">${sharing ? 'Slå fra' : 'Slå til'}</button></div><div class="muted">Positionen deles kun, mens denne side er åben på telefonen. Hold skærmen tændt under kørsel.</div></div>` +
+    ((data || []).map((o) => `<div class="card" data-o="${o.id}" style="cursor:pointer"><div class="row"><b>${esc(o.ref)}</b><span class="pill">${esc(ST[o.status])}</span></div><div>${esc(o.from_address)}</div>${o.to_address ? `<div class="muted">→ ${esc(o.to_address)}</div>` : ''}<div class="muted">${esc(dt(o.pickup_at))}</div></div>`).join('') || '<div class="card muted">Ingen aktive ture lige nu. Siden opdateres, når kontoret tildeler dig en tur.</div>') +
     '<button class="ghost" id="rl">Opdatér</button>';
+  bindNav();
   $('#sh').onclick = async () => { if (sharing) await stopShare(); else startShare(); trips(); };
   $('#rl').onclick = trips; $$('[data-o]').forEach((c) => c.onclick = () => trip(c.dataset.o));
 }
@@ -81,16 +83,16 @@ async function trip(id) {
   app.innerHTML = '<p class="muted">Henter…</p>';
   const [{ data: t }, { data: tm }, { data: ex }] = await Promise.all([sb.from('orders').select('*').eq('id', id).eq('driver_id', me.id).maybeSingle(), sb.from('trip_timings').select('*').eq('order_id', id), sb.from('order_extras').select('*').eq('order_id', id).order('created_at')]);
   if (!t) return trips();
-  const hourly = t.service === 'hourly'; const stops = hourly ? [['pickup', 'Ved kunden']] : [['pickup', 'Afhentning'], ['delivery', 'Levering']];
+  const stops = t.to_address ? [['pickup', 'Afhentning'], ['delivery', 'Levering']] : [['pickup', 'Afhentning']];
   const nxt = NEXT[t.status]; const tgt = t.status === 'assigned' ? { a: t.from_address, la: t.from_lat, lo: t.from_lon } : { a: t.to_address || t.from_address, la: t.to_lat ?? t.from_lat, lo: t.to_lon ?? t.from_lon };
   app.innerHTML = `<button class="ghost" id="bk">← Mine ture</button>
   <div class="card"><div class="row"><h2>${esc(t.ref)}</h2><span class="pill">${esc(ST[t.status])}</span></div>
     <div class="muted">Afhentning</div><div>${esc(t.from_address)}</div>${t.to_address ? `<div class="muted">Levering</div><div>${esc(t.to_address)}</div>` : ''}
     <div class="muted">${esc(dt(t.pickup_at))} · ${esc(t.goods || '')} · ${t.pallets ?? ''} pl. · ${t.weight_kg ?? ''} kg</div>
     <a class="btn ghost" target="_blank" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(tgt.la && tgt.lo ? tgt.la + ',' + tgt.lo : tgt.a)}&travelmode=driving">Åbn rute til ${t.status === 'assigned' ? 'afhentning' : 'levering'}</a></div>
-  <div class="card"><h3>Tid på stedet og ventetid</h3><div class="muted">${hourly ? 'Timebooking: ventetid indgår i timerne og faktureres ikke særskilt.' : 'Gratis ventetid pr. stop: 15 min. Derefter 8 kr/min ekskl. moms pr. påbegyndt minut, når kunden har godkendt det.'}</div>
+  <div class="card"><h3>Tid på stedet og ventetid</h3><div class="muted">${'Gratis ventetid pr. stop: 15 min. Derefter 8 kr/min ekskl. moms pr. påbegyndt minut, når kunden har godkendt det.'}</div>
     ${stops.map(([s, l]) => { const x = (tm || []).find((y) => y.stop === s); return `<div class="card" style="background:var(--card2)"><b>${l}</b><div class="muted">${x?.arrived_at ? 'Ankommet ' + hm(x.arrived_at) : 'Ikke ankommet'}${x?.handling_started_at ? ' · påbegyndt ' + hm(x.handling_started_at) : ''}${x?.handling_ended_at ? ' · færdig ' + hm(x.handling_ended_at) : ''}</div>
-      ${!x?.arrived_at ? `<button class="ghost" data-log="${s}|arrive">Ankommet</button>` : ''}${x?.arrived_at && !x?.handling_started_at ? `<button class="ghost" data-log="${s}|start">Start af/pålæsning</button>` : ''}${x?.arrived_at && !hourly ? `<button class="ghost" data-wait="${s}">Registrér ventetid</button>` : ''}</div>`; }).join('')}
+      ${!x?.arrived_at ? `<button class="ghost" data-log="${s}|arrive">Ankommet</button>` : ''}${x?.arrived_at && !x?.handling_started_at ? `<button class="ghost" data-log="${s}|start">Start af/pålæsning</button>` : ''}${x?.arrived_at ? `<button class="ghost" data-wait="${s}">Registrér ventetid</button>` : ''}</div>`; }).join('')}
     <div id="wf"></div></div>
   <div class="card"><h3>Udlæg og tillæg</h3><div class="muted">Bro, færge og parkering kræver bilag. Kontoret godkender, og kunden skal acceptere, før noget faktureres.</div>
     ${(ex || []).map((e) => `<div class="line row"><span>${esc(e.kind)}: ${esc(e.description)}</span><span class="pill ${e.status === 'customer_accepted' ? 'good' : e.status.includes('declined') || e.status === 'rejected' ? 'low' : ''}">${esc(XS[e.status] || e.status)}</span></div>`).join('')}
@@ -118,6 +120,53 @@ async function trip(id) {
     const { error } = await sb.rpc('driver_set_status', { p_order: id, p_status: nxt[0], p_recipient: recipient, p_note: null, p_photo: photo });
     if (error) { go.disabled = false; return ($('#ge').textContent = error.message); }
     if (del) trips(); else trip(id); };
+}
+
+
+// ───────────── Indtjening (beløb i øre; moms og udlæg vises separat; Road Forces andel returneres aldrig) ─────────────
+const kr = (o) => { if (o == null) return '–'; const a = Math.abs(Math.round(o)); return (o < 0 ? '-' : '') + String(Math.floor(a / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + String(a % 100).padStart(2, '0') + ' kr'; };
+const p2 = (n) => String(n).padStart(2, '0'), ymd = (d) => d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()), at12 = (x) => new Date(x + 'T12:00:00');
+const nav = (a) => `<div class="row" style="gap:8px;flex-wrap:nowrap"><button class="${a === 't' ? '' : 'ghost'}" id="nt" style="flex:1">Ture</button><button class="${a === 'e' ? '' : 'ghost'}" id="ne" style="flex:1">Indtjening</button></div>`;
+const bindNav = () => { $('#nt').onclick = () => { clearTimeout(eTimer); trips(); }; $('#ne').onclick = () => earnings(); };
+let eWin = 'month', eFrom = '', eTo = '', eTimer = null;
+const SLAB = { expected: 'Forventet', pending: 'Afventer afregning', paid: 'Udbetalt' }, SCLS = { expected: '', pending: 'amber', paid: 'good' };
+function erange() {
+  const n = new Date(), mon = new Date(n); mon.setDate(n.getDate() - ((n.getDay() + 6) % 7)); const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  if (eWin === 'month') return [ymd(new Date(n.getFullYear(), n.getMonth(), 1)), ymd(new Date(n.getFullYear(), n.getMonth() + 1, 0))];
+  if (eWin === 'period') { const f = /^\d{4}-\d{2}-\d{2}$/.test(eFrom) ? eFrom : ymd(new Date(n.getFullYear(), n.getMonth(), 1)), t = /^\d{4}-\d{2}-\d{2}$/.test(eTo) ? eTo : ymd(n); return f <= t ? [f, t] : [t, f]; }
+  return [ymd(mon), ymd(sun)];
+}
+function echart(trips, from, to) {
+  const weekly = (at12(to) - at12(from)) / 864e5 > 31, key = (s) => { if (!weekly) return s; const x = at12(s); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return ymd(x); }, sums = {};
+  trips.filter((t) => (t.st === 'pending' || t.st === 'paid') && t.amt != null && t.d >= from && t.d <= to).forEach((t) => { sums[key(t.d)] = (sums[key(t.d)] || 0) + t.amt; });
+  const keys = []; for (let x = at12(key(from)); x <= at12(to); x.setDate(x.getDate() + (weekly ? 7 : 1))) keys.push(ymd(x));
+  const vals = keys.map((k) => sums[k] || 0), max = Math.max(1, ...vals); if (!vals.some((v) => v)) return '<div class="muted">Ingen gennemførte ture i perioden endnu.</div>';
+  return `<div class="bars">${keys.map((k, i) => `<i class="${vals[i] ? '' : 'z'}" title="${k}: ${kr(vals[i])}" style="height:${Math.max(vals[i] ? 4 : 1, Math.round(vals[i] / max * 100))}px"></i>`).join('')}</div><div class="row muted"><span>${keys[0].slice(8)}/${keys[0].slice(5, 7)}</span><span>${weekly ? 'pr. uge' : 'pr. dag'} · størst ${kr(max)}</span><span>${keys[keys.length - 1].slice(8)}/${keys[keys.length - 1].slice(5, 7)}</span></div>`;
+}
+const etiles = (w) => `<div class="tiles"><div class="tile"><span class="muted">Forventet</span><b>${kr(w.expected ?? 0)}</b></div><div class="tile"><span class="muted">Optjent</span><b style="color:#7fe3ad">${kr(w.earned ?? 0)}</b></div><div class="tile"><span class="muted">Afventer afregning</span><b style="color:var(--amber)">${kr(w.pending ?? 0)}</b></div><div class="tile"><span class="muted">Udbetalt</span><b style="color:#7fe3ad">${kr(w.paid ?? 0)}</b></div></div><div class="muted">${w.trips_done || 0} gennemførte ture · ${w.trips_expected || 0} tildelte, endnu ikke leveret</div>`;
+const city = (a) => { const p = String(a || '').split(',').map((x) => x.trim()); return (p.length >= 2 ? p[p.length - 2] : p[0]).replace(/^\d{4}\s*/, ''); };
+const erow = (t) => `<div class="card"><div class="row"><b>${esc(t.ref)} · ${esc(city(t.from_address))}${t.to_address ? ' → ' + esc(city(t.to_address)) : ''}</b><b>${t.amt == null ? 'Aftale mangler' : kr(t.amt)}</b></div><div><span class="pill ${SCLS[t.st] || ''}">${esc(SLAB[t.st] || t.st)}</span>${t.estimate && t.amt != null ? ' <span class="pill">estimat</span>' : ''}</div><div class="muted">Grundlag ${kr(t.basis_ex_vat)} ekskl. moms · moms ${kr(t.vat)}${(t.expenses_sub || t.expenses_rf) ? ' · udlæg ' + kr((t.expenses_sub || 0) + (t.expenses_rf || 0)) + ' (separat)' : ''}${t.paid_at ? ' · udbetalt ' + esc(t.paid_at) : ''}</div></div>`;
+async function earnings(keep) {
+  $('#out').hidden = false; clearTimeout(eTimer);
+  const [from, to] = erange();
+  const { data: r, error } = await sb.rpc('driver_earnings', { p_from: from, p_to: to });
+  const head = nav('e') + `<div class="row" style="gap:6px;flex-wrap:nowrap">${[['today', 'I dag'], ['week', 'Uge'], ['month', 'Måned'], ['period', 'Periode']].map(([v, l]) => `<button class="${eWin === v ? '' : 'ghost'}" data-w="${v}" style="flex:1;padding:10px 4px">${l}</button>`).join('')}</div>` +
+    (eWin === 'period' ? `<div class="card"><label>Fra (ÅÅÅÅ-MM-DD)<input id="pf" value="${esc(eFrom)}" placeholder="${from}"></label><label>Til (ÅÅÅÅ-MM-DD)<input id="pt" value="${esc(eTo)}" placeholder="${to}"></label><button class="ghost" id="pg">Vis periode</button></div>` : '');
+  if (error || !r) app.innerHTML = head + '<div class="card err">Kunne ikke hente indtjeningen. Tjek forbindelsen.</div>';
+  else {
+    const w = r[eWin] || {}, trips = r.trips || [], open = trips.filter((t) => t.st === 'expected'), done = trips.filter((t) => t.st !== 'expected'), none = r.mode === 'missing' || r.mode === 'roadforce_driver', c = r.company && r.company[eWin];
+    app.innerHTML = head + (r.note ? `<div class="card">${esc(r.note)}</div>` : '') + (none ? '' :
+      `<div class="card"><div class="muted">${r.mode === 'recipient' ? 'Din andel som afregningsmodtager' + (r.sub_name ? ' (' + esc(r.sub_name) + ')' : '') : 'Din personlige andel (' + r.personal_pay_percent + ' % af firmaets andel)'}</div>${etiles(w)}</div>
+      <div class="card"><h3>Diagram</h3>${echart(trips, from, to)}</div>
+      <div class="card"><h3>Ikke en del af din indtjening</h3><div class="row"><span class="muted">Afregningsgrundlag ekskl. moms</span><span>${kr(w.basis_ex_vat)}</span></div><div class="row"><span class="muted">Moms på turene</span><span>${kr(w.vat)}</span></div><div class="row"><span class="muted">Udlæg afholdt af underleverandør</span><span>${kr(w.expenses_sub)}</span></div><div class="row"><span class="muted">Udlæg afholdt af Road Force</span><span>${kr(w.expenses_rf)}</span></div><div class="muted">Moms og udlæg afregnes separat og indgår ikke i beløbene ovenfor. Road Forces andel vises ikke her.</div></div>`) +
+      (trips.length ? `<h3>Tildelte ture (forventet)</h3>${open.map(erow).join('') || '<div class="muted">Ingen åbne ture.</div>'}<h3>Gennemførte ture i perioden</h3>${done.map(erow).join('') || '<div class="muted">Ingen gennemførte ture i perioden.</div>'}` : (none ? '' : '<div class="card muted">Ingen ture med indtjening i perioden endnu.</div>')) +
+      (c ? `<div class="card"><h3>Firmaets tal${r.company.name ? ' – ' + esc(r.company.name) : ''}</h3><div class="muted">Alle chaufførers ture for firmaet i valgt periode.</div>${etiles(c)}<b>Fordeling pr. chauffør</b>${(r.company.by_driver || []).map((d) => `<div class="row"><div><div>${esc(d.driver_name || 'Chauffør')}</div><div class="muted">${d.trips_done} ture · firmaets andel ${kr(d.company_share)}</div></div><div style="text-align:right"><b>${d.personal_amount == null ? 'Aftale mangler' : kr(d.personal_amount)}</b><div class="muted">${d.is_recipient ? 'afregningsmodtager' : d.personal_pay_percent == null ? 'personlig afregning' : d.personal_pay_percent + ' % personlig'}</div></div></div>`).join('') || '<div class="muted">Ingen gennemførte ture i perioden.</div>'}</div>` : '') +
+      '<button class="ghost" id="erl">Opdatér</button>';
+  }
+  bindNav(); $$('[data-w]').forEach((b) => b.onclick = () => { eWin = b.dataset.w; earnings(); });
+  if ($('#pg')) $('#pg').onclick = () => { eFrom = $('#pf').value.trim(); eTo = $('#pt').value.trim(); earnings(); };
+  if ($('#erl')) $('#erl').onclick = () => earnings();
+  eTimer = setTimeout(function tick() { if (!$('#erl')) return; if (!document.hidden && document.activeElement?.tagName !== 'INPUT') earnings(); else eTimer = setTimeout(tick, 30000); }, 30000);
 }
 
 async function boot() {
