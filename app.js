@@ -34,6 +34,7 @@
   const S = { sb: null, me: null, orders: [], drivers: [], positions: new Map(), pricing: null, company: null, inquiries: [], selected: null,
               map: null, traffic: null, dMarkers: new Map(), oMarkers: [], route: null, info: null, realtimeOk: false };
 
+  window.RFApp = { S, esc, kr, $, $$ };
   // ───────────── Start ─────────────
   if (!CFG.SUPABASE_URL || !CFG.SUPABASE_ANON_KEY) {
     $('#login-error').textContent = 'config.js mangler. Kopiér config.example.js til config.js og udfyld den.';
@@ -163,6 +164,7 @@
     $$('#nav button').forEach((b) => b.classList.toggle('active', b.dataset.view === v));
     $$('.view').forEach((x) => (x.hidden = x.id !== `view-${v}`));
     if (v === 'map' && S.map) google.maps.event.trigger(S.map, 'resize');
+    window.dispatchEvent(new CustomEvent('rf-showview', { detail: v }));
   }
 
   function renderAll() {
@@ -185,8 +187,10 @@
         <b>${esc(o.ref)} · ${esc(custName(o))}</b>
         <small>${esc(city(o.from_address))} → ${esc(city(o.to_address))} · ${esc(dt(o.pickup_at))}</small>
         <small>${esc(vehLabel(o))} · ${esc(pal(o.pallets))} · ${esc(o.weight_kg)} kg · ${kr(o.price_ex_vat)} ekskl. moms</small>
+        <div class="suggest" data-suggest="${esc(o.id)}"><small class="muted">Finder nærmeste chauffør…</small></div>
         <select data-assign="${esc(o.id)}">${driverOptions('')}</select>
       </div>`).join('') : '<p class="muted">Ingen nye betalte ordrer.</p>';
+    fresh.forEach((o) => loadSuggestion(o.id));
     const act = S.orders.filter((o) => ACTIVE.includes(o.status));
     $('#panel-active').innerHTML = act.length ? act.map((o) => `
       <div class="item" data-open="${esc(o.id)}">
@@ -225,6 +229,20 @@
   // ───────────── Handlinger ─────────────
   async function fnError(error) {
     try { const j = await error.context.json(); return j.error || 'Fejl'; } catch { return error.message || 'Fejl'; }
+  }
+
+  // Forslag: nærmeste online chauffør (luftlinje til afhentning). Intet tildeles før du godkender.
+  async function loadSuggestion(orderId) {
+    const box = document.querySelector(`[data-suggest="${CSS.escape(orderId)}"]`); if (!box) return;
+    const { data, error } = await S.sb.rpc('admin_suggest_drivers', { p_order: orderId });
+    if (error) { box.innerHTML = `<small class="muted">Kunne ikke hente forslag</small>`; return; }
+    if (!data || !data.length) { box.innerHTML = '<small class="muted">Ingen chauffør er online – vælg manuelt nedenfor.</small>'; return; }
+    const d = data[0];
+    box.innerHTML = `<small><b>Forslag:</b> ${esc(d.full_name)} · ${String(d.km).replace('.', ',')} km fra afhentning${d.active_trips ? ' · ' + d.active_trips + ' aktiv(e) tur(e)' : ''}</small>
+      <button class="btn sug-ok" type="button">Godkend og send til ${esc(d.full_name)}</button>`;
+    const btn = box.querySelector('.sug-ok');
+    btn.addEventListener('click', async (e) => { e.stopPropagation(); btn.disabled = true; await assign(orderId, d.driver_id); });
+    box.addEventListener('click', (e) => e.stopPropagation());
   }
 
   async function assign(orderId, driverId) {

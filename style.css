@@ -79,3 +79,36 @@ tbody tr{cursor:pointer}tbody tr:hover{background:var(--card2)}
 }
 #pricing-fields h3{font-size:14px;margin:18px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .view{overflow:auto}.drawer form label{margin-bottom:8px}
+
+/* Chauffør-forslag på nye ordrer */
+.suggest{margin-top:8px;padding:8px 10px;border:1px solid var(--line,#2a2f38);border-radius:10px;display:flex;flex-direction:column;gap:6px}
+.suggest .sug-ok{align-self:flex-start;padding:6px 12px;border-radius:8px;border:0;background:#255cff;color:#fff;font-weight:700;cursor:pointer}
+.suggest .sug-ok:disabled{opacity:.6;cursor:default}
+
+/* Regnskab, underleverandører, kvalitet, support */
+.pad{padding:16px 20px 40px;display:grid;gap:14px;align-content:start}
+.notice{background:rgba(245,165,36,.1);border:1px solid rgba(245,165,36,.35);border-radius:12px;padding:10px 14px;margin:0;color:#f3d9a4;font-size:14px}
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.filters label{margin:0;min-width:150px}.filters label.chk{display:flex;gap:8px;align-items:center;text-transform:none;font-size:14px;color:var(--text);min-width:0}
+.filters label.chk input,.card label.chk input{width:auto;margin:0}
+.filters input[type=date]{width:auto;margin:0}
+.chip-btn{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:8px 14px;cursor:pointer;font-weight:600;color:var(--muted)}.chip-btn.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.tile{text-align:left;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;display:grid;gap:4px}
+.tile:hover{border-color:var(--blue)}.tile span{color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.tile b{font-size:24px}.tile small{color:var(--muted)}.tile.good b{color:var(--green)}
+.cols2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+.sec{margin-top:10px}
+.donut{display:flex;gap:18px;align-items:center;flex-wrap:wrap}.donut ul{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.donut li{display:grid;grid-template-columns:14px 1fr auto auto;gap:8px;align-items:center}.donut i{width:12px;height:12px;border-radius:3px;display:block}.donut small{color:var(--muted)}
+.bars{overflow-x:auto}
+td.r,th.r{text-align:right}td small{display:block;color:var(--muted)}td small.warn{color:var(--amber)}
+.tag{display:inline-block;background:var(--card2);border:1px solid var(--line);border-radius:999px;padding:1px 9px;font-size:12px;color:var(--muted)}.tag.warnt{color:var(--amber);border-color:rgba(245,165,36,.5)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.row input,.row select{margin:0;width:auto;flex:1;min-width:140px}
+.item.click{cursor:pointer}.item.click:hover{background:var(--card2)}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 14px}
+textarea{display:block;width:100%;margin-top:6px;background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:11px 12px;color:var(--text);font:inherit}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:grid;place-items:center;z-index:50;padding:16px}.modal-card{width:100%;max-width:440px}
+.acts{white-space:nowrap}.acts .btn{margin-right:4px}
+.ticket .msg{background:var(--card2);border-radius:10px;padding:8px 12px;margin:6px 0}.ticket .msg.adm{border-left:3px solid var(--blue)}
+@media(max-width:800px){.shell{grid-template-columns:1fr}.side{flex-direction:row;overflow-x:auto;padding:8px}.side nav{display:flex}.side-foot,.side-logo{display:none}.pad{padding:12px}}
