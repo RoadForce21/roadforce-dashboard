@@ -7,18 +7,25 @@ export class QuoteError extends Error {
 }
 
 export const VEHICLES = { van: 'Mercedes-Benz Vito – kassebil', van_large: 'Mercedes-Benz Sprinter L2H2 – stor kassebil', lift: 'Mercedes-Benz Sprinter – liftbil (8 paller)' };
-export const HANDLING_MIN = { van: 10, van_large: 15, lift: 15 };   // inkluderet håndtering pr. stop (minutter)
+/** Ventetid ved afhentning/levering (A–B): første 15 min. er gratis, derefter 8 kr. ekskl. moms pr. påbegyndt minut – ens for alle biltyper. Timebooking har ingen særskilt ventetid. Satserne kan rettes i pricing_settings (wait_free_min, wait_per_min_ore). */
+export const WAIT_DEFAULT = { free_min: 15, per_min_ore: 800 };
+/** Ventetidsgebyr for ét stop (øre ekskl. moms). Spejler databasefunktionen _wait_amount(): minutter rundes op, de gratis minutter trækkes fra. */
+export function waitCharge(minutesOnSite, p = {}) {
+  const free = p.wait_free_min ?? WAIT_DEFAULT.free_min, rate = p.wait_per_min_ore ?? WAIT_DEFAULT.per_min_ore;
+  const billable = Math.max(0, Math.ceil(minutesOnSite - 1e-9) - free);
+  return { billableMinutes: billable, amount: billable * rate };
+}
 
 /** Standardsatser = prislisten (øre). Gemmes i tabellen pricing_settings og kan rettes i dashboardet. */
 export const DEFAULT_PRICING = {
   van_min_ore: 42500, lift_min_ore: 57500,
   van_km_ore: 1600, lift_km_ore: 1950,
   van_stop_ore: 9000, lift_stop_ore: 12000,
-  van_wait_ore: 14000, lift_wait_ore: 16500,          // pr. påbegyndt kvarter ud over inkluderet tid
+  wait_free_min: 15, wait_per_min_ore: 800,           // ventetid pr. stop: gratis minutter, derefter øre pr. påbegyndt minut
   van_hour_ore: 55000, lift_hour_ore: 67500,
   van_extra_km_ore: 400, lift_extra_km_ore: 500,      // timebooking: km ud over puljen
   // Sprinter L2H2: satser foreslået af RoadForce 12. nov. 2026. Kapacitet er IKKE dokumenteret → fast pris først når begge grænser er udfyldt.
-  van_large_min_ore: 49500, van_large_km_ore: 1800, van_large_stop_ore: 10500, van_large_wait_ore: 15000, van_large_hour_ore: 62500, van_large_extra_km_ore: 450,
+  van_large_min_ore: 49500, van_large_km_ore: 1800, van_large_stop_ore: 10500, van_large_hour_ore: 62500, van_large_extra_km_ore: 450,
   van_large_max_pallets: null, van_large_max_weight_kg: null,
   price_version: '2026-11-12',
   hourly_min_hours: 2, km_per_hour: 20,
@@ -114,7 +121,7 @@ export function computePrice(p, i) {
     base = Math.max(min, kmPrice);              // minimumsprisen lægges IKKE oveni
     lines.push({ key: 'transport', label: kmPrice < min ? `Transport ${km} km (minimumspris)` : `Transport ${km} km`, amount: base });
     if (stops) lines.push({ key: 'stops', label: `${stops} ekstra stop`, amount: stops * p[`${v}_stop_ore`] });
-    notes.push('Inkluderet håndtering pr. stop: ' + HANDLING_MIN[v] + ' min. Ekstra tid afregnes pr. påbegyndt kvarter (' + (p[`${v}_wait_ore`] / 100) + ' kr.).');
+    notes.push('Ventetid: de første ' + (p.wait_free_min ?? WAIT_DEFAULT.free_min) + ' min. pr. stop er gratis, derefter ' + ((p.wait_per_min_ore ?? WAIT_DEFAULT.per_min_ore) / 100) + ' kr. ekskl. moms pr. påbegyndt minut.');
   } else {
     const h = i.hours;
     if (!isQuarterHours(h) || h < p.hourly_min_hours) throw new QuoteError(`Timebooking er mindst ${p.hourly_min_hours} timer (derefter pr. påbegyndt kvarter).`);
@@ -140,7 +147,7 @@ export function computePrice(p, i) {
 
   const exVat = lines.reduce((s, l) => s + l.amount, 0);
   const vat = eur(exVat * p.vat_percent / 100);
-  notes.push('Bro-, færge- og nødvendig betalingsparkering afregnes efter dokumenteret udgift. Ventetid ud over inkluderet tid faktureres bagefter.');
+  notes.push('Bro-, færge- og nødvendig betalingsparkering afregnes efter dokumenteret udgift. Ventetid ud over de gratis minutter faktureres bagefter og kræver din godkendelse.');
   return { lines, exVat, vat, total: exVat + vat, vatPercent: p.vat_percent, km, notes, priceVersion: p.price_version ?? null };
 }
 
