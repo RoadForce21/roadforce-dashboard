@@ -61,9 +61,10 @@ function authView(mode = 'login', msg = '') {
     <label>E-mail<input name="email" type="email" required autocomplete="email"></label>
     <label>Adgangskode<input name="pw" type="password" required minlength="8" autocomplete="${su ? 'new-password' : 'current-password'}"></label>
     ${su ? `<label style="display:flex;gap:8px;align-items:flex-start;color:var(--text)"><input type="checkbox" name="terms" required style="width:auto;margin-top:4px"><span>Jeg accepterer <a style="color:#9db6ff" target="_blank" href="vilkaar.html">vilkårene</a> og <a style="color:#9db6ff" target="_blank" href="privatliv.html">privatlivspolitikken</a>.</span></label>` : ''}
-    <button>${su ? 'Opret konto' : 'Log ind'}</button><div class="err" id="ae">${esc(msg)}</div></form></div>`;
+    <button>${su ? 'Opret konto' : 'Log ind'}</button>${su ? '' : '<a href="#" id="fp" style="color:#9db6ff;font-size:14px">Glemt adgangskode?</a>'}<div class="err" id="ae">${esc(msg)}</div></form></div>`;
   $$('[data-m]').forEach((b) => b.onclick = () => authView(b.dataset.m));
   const kind = $('[name=kind]'); if (kind) kind.onchange = () => { const b = $('#biz'); b.hidden = kind.value !== 'business'; b.style.display = kind.value === 'business' ? 'grid' : 'none'; };
+  const fp = $('#fp'); if (fp) fp.onclick = async (ev) => { ev.preventDefault(); const e = $('#af').email.value.trim(); if (!e) return ($('#ae').textContent = 'Skriv din e-mail ovenfor.'); await sb.auth.resetPasswordForEmail(e, { redirectTo: 'https://roadforce21.github.io/roadforce-dashboard/nyt-kodeord.html' }); $('#ae').textContent = 'Hvis e-mailen findes hos os, har vi sendt et link til en ny adgangskode.'; };
   $('#af').onsubmit = async (ev) => {
     ev.preventDefault(); const f = ev.target; const btn = f.querySelector('button:not([data-m])'); btn.disabled = true; $('#ae').textContent = '';
     if (su) {

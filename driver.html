@@ -57,7 +57,8 @@ async function stopShare() { if (geoWatch != null) navigator.geolocation.clearWa
 // ───────────── Login ─────────────
 function login(msg = '') {
   $('#out').hidden = true;
-  app.innerHTML = `<form id="lf" class="card"><h2>Log ind</h2><label>E-mail<input name="e" type="email" required autocomplete="email"></label><label>Adgangskode<input name="p" type="password" required autocomplete="current-password"></label><button>Log ind</button><div class="err" id="le">${esc(msg)}</div></form>`;
+  app.innerHTML = `<form id="lf" class="card"><h2>Log ind</h2><label>E-mail<input name="e" type="email" required autocomplete="email"></label><label>Adgangskode<input name="p" type="password" required autocomplete="current-password"></label><button>Log ind</button><a href="#" id="fp" style="color:#9db6ff;font-size:14px">Glemt adgangskode?</a><div class="err" id="le">${esc(msg)}</div></form>`;
+  $('#fp').onclick = async (ev) => { ev.preventDefault(); const e = $('#lf').e.value.trim(); if (!e) return ($('#le').textContent = 'Skriv din e-mail ovenfor.'); await sb.auth.resetPasswordForEmail(e, { redirectTo: 'https://roadforce21.github.io/roadforce-dashboard/nyt-kodeord.html' }); $('#le').textContent = 'Hvis e-mailen findes hos os, har vi sendt et link til en ny adgangskode.'; };
   $('#lf').onsubmit = async (ev) => { ev.preventDefault(); const f = ev.target; const { error } = await sb.auth.signInWithPassword({ email: f.e.value.trim(), password: f.p.value }); if (error) return ($('#le').textContent = 'Forkert e-mail eller adgangskode.'); boot(); };
 }
 
