@@ -302,6 +302,19 @@
     });
   }
 
-  window.addEventListener('rf-showview', (e) => { const v = e.detail; if (v === 'regnskab') { R.rows = null; renderRegnskab(); } if (v === 'subs') renderSubs(); if (v === 'tolls') renderTolls(); if (v === 'quality') renderQuality(); if (v === 'support') renderSupport(); });
+  // ───── Driftsalarmer ─────
+  const OPS = { unassigned: 'Ikke tildelt', awaiting_approval: 'Venter på godkendelse', driver_not_started: 'Chauffør ikke afsted', late_delivery: 'Længe undervejs', driver_issue: 'Afvigelse meldt af chauffør', open_complaint: 'Åben klage' };
+  async function renderOps() {
+    const el = $('#ops-body');
+    const { data, error } = await sb().rpc('admin_ops_alerts');
+    if (error) { if (el) el.innerHTML = `<p class="error">${esc(err(error))}</p>`; return; }
+    const b = $('#badge-ops'); if (b) { b.hidden = !data.length; b.textContent = data.length; }
+    if (!el) return;
+    const dur = (m) => (m == null ? '–' : m >= 120 ? Math.round(m / 60) + ' t' : m + ' min');
+    el.innerHTML = (data.length ? '' : '<p class="muted">Ingen alarmer – alle ture er under kontrol.</p>') + table(['Type', 'Ordre', 'Hvor længe', 'Detalje'], data.map((a) => `<tr><td>${esc(OPS[a.kind] || a.kind)}</td><td><b>${esc(a.ref)}</b></td><td>${dur(a.minutes)}</td><td>${esc(a.detail || '')}</td></tr>`));
+  }
+  setInterval(() => { try { if (S.sb && S.me) renderOps(); } catch (e) { /* ignorer */ } }, 60000);
+  setTimeout(() => { try { if (S.sb && S.me) renderOps(); } catch (e) { /* ignorer */ } }, 4000);
+  window.addEventListener('rf-showview', (e) => { const v = e.detail; if (v === 'regnskab') { R.rows = null; renderRegnskab(); } if (v === 'subs') renderSubs(); if (v === 'tolls') renderTolls(); if (v === 'quality') renderQuality(); if (v === 'support') renderSupport(); if (v === 'ops') renderOps(); });
   window.RFModules = { renderTolls, renderRegnskab, renderSubs, renderQuality, renderSupport, R, U };
 })();
