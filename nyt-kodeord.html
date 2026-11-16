@@ -44,7 +44,7 @@ $('#f').onsubmit = async (ev) => {
   f.querySelector('button').disabled = true;
   const { error } = await sb.auth.updateUser({ password: f.p1.value });
   if (error) { f.querySelector('button').disabled = false; return ($('#r').innerHTML = '<p class="err">' + (/same|different/i.test(error.message) ? 'Vælg en anden adgangskode end den gamle.' : /weak|short|least/i.test(error.message) ? 'Adgangskoden er for svag. Brug mindst 8 tegn.' : 'Adgangskoden kunne ikke ændres. Bed om et nyt link og prøv igen.') + '</p>'); }
-  f.hidden = true; $('#m').textContent = ''; $('#r').innerHTML = '<p class="ok"><b>Adgangskoden er ændret.</b> Åbn Road Force eller RF Partner, og log ind med den nye adgangskode.</p>';
+  f.hidden = true; $('#m').textContent = ''; $('#r').innerHTML = '<p class="ok"><b>Adgangskoden er ændret.</b> Åbn Road Force, RF Partner eller underleverandørportalen, og log ind med den nye adgangskode.</p>';
   await sb.auth.signOut();
 };
 </script>

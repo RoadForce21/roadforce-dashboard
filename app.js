@@ -410,14 +410,17 @@
   }
   function renderPricingExample() {
     const P = window.RFPricing; if (!P) return;
-    const p = readPricing(); if (!Object.values(p).every(Number.isFinite)) return;
+    // Tom Sprinter-kapacitet (null) er gyldig og betyder "kun tilbud"; alle andre felter skal være tal.
+    const p = readPricing(); if (!Object.entries(p).every(([k, v]) => Number.isFinite(v) || (v === null && /^van_large_max_/.test(k)))) return;
     const wed = new Date('2026-11-11T09:00:00Z'), sat = new Date('2026-11-14T09:00:00Z');
-    const ex = (label, input) => { try { const r = P.computePrice(p, input); return `${label} → <b>${kr(r.exVat)}</b> ekskl. / ${kr(r.total)} inkl. moms`; } catch (e) { return `${label} → ${esc(e.message)}`; } };
+    const ex = (label, input) => { try { const r = P.computePrice(p, input); return `${label} → <b>${kr(r.exVat)}</b> ekskl. / ${kr(r.total)} inkl. moms`; }
+      catch (e) { return e.code === 'QUOTE_ONLY' ? `${label} → <b>Få tilbud</b> <span class="muted">– ${esc(e.message)}</span>` : `${label} → ${esc(e.message)}`; } };
     $('#pricing-example').innerHTML = 'Eksempler (hverdag kl. 10 hvis ikke andet står):<br>' + [
       ex('Kassebil 30 km', { vehicle: 'van', km: 30, pickupAt: wed }),
       ex('Liftbil 50 km, 1 ekstra stop', { vehicle: 'lift', km: 50, stops: 1, pickupAt: wed }),
       ex('Kassebil 50 km, lørdag', { vehicle: 'van', km: 50, pickupAt: sat }),
       ex('Kassebil 120 km', { vehicle: 'van', km: 120, pickupAt: wed }),
+      ex('Sprinter L2H2 30 km', { vehicle: 'van_large', km: 30, pickupAt: wed }),
     ].join('<br>');
   }
   async function savePricing(e) {
